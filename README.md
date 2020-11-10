@@ -1,15 +1,11 @@
-# Analysis of Dynamic Susceptibility Contrast (DSC) MRI
+# Analysis of CT Perfusion 
 
 ## Introduction
-Dynamic Susceptibility Contrast (DSC) MRI imaging is an important functional imaging method that enables quantitative assessment of tissue hemodynamic patterns. Abnormality of blood flow, volume and permeability is frequently observed during tumor growth, and characterization of these perfusion attributes has become clinically important for both diagnosis and therapy planning. In the context of glial neoplasms, perfusion characteristics have been shown to correlate with tumor type and grade and hence influence treatment decisions.
+Modification of DSC MRI Analysis (See documentation at [DSC MRI Analysis Wiki](http://slicer.org/slicerWiki/index.php/Documentation/Nightly/Modules/DSC_MRI_Analysis))
 
-See documentation at
-[DSC MRI Analyais Wiki](http://slicer.org/slicerWiki/index.php/Documentation/Nightly/Modules/DSC_MRI_Analysis)
+This is a CLI module for 3d Slicer, using ITK. 
 
-## Functionality
-* Estimation of quantitative parameters(rCBV,rCBF and MTT) from DSC MRI.
-* Guide diagnosis, prognosis and therapy planning.
-* Brain Tumor, Stroke, Adrenoleukodystrophy and other diseases. 
+
 
 ## Acknowledgments
 Acknowledgments: This work is part of the National Alliance for Medical Image Computing (NA-MIC), funded by the National Institutes of Health through the NIH Roadmap for Medical Research, and by National Cancer Institute as part of the Quantitative Imaging Network initiative (U01CA154601) and QIICR (U24CA180918).

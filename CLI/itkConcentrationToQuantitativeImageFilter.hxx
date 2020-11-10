@@ -445,7 +445,11 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
           }
         }
 
+      //shiftedVectorVoxel 
+
       // Calculate parameter k2, k1, and fpv
+      //fpv? 
+      //must remove k2 and k1 from the AUC to get relative CBV etc 
       double rSquared = 0.0;
       if (success)
         {
@@ -464,7 +468,8 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
           costFunction->GetFittedFunction(param);
         for(size_t i=0;i<fittedVectorVoxel.GetSize();i++)
           {
-            fittedVectorVoxel[i] = shiftedVectorVoxel[i]+tempK2*IntCb[i];
+            // fittedVectorVoxel[i] = shiftedVectorVoxel[i]+tempK2*IntCb[i];
+            // does commenting out this do it? 
           }
         
         // Shift the current time course to align with the BAT of the AIF
@@ -529,6 +534,8 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
       // Calculate parameter CBV
       if (success)
         {
+
+
         tempAUC =
           (area_under_curve(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) );
         }
@@ -636,6 +643,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage, TMaskImage, TOutputImage>
     // Outputs
     // -------
     // AIF : arterial input function as a function of time
+
     std::vector<float> AIF;
 
     // Make a high resolution timing vector as input to the AIF construction.
@@ -808,8 +816,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage, TMaskImage, TOutputImage>
 }
 
 
-// Calculate average AIF according to the AIF mask
-// this is what is throwing the error! 
+// Calculate average AIF according to the AIF mask 
 template <class TInputImage, class TMaskImage, class TOutputImage>
 std::vector<float>
 ConcentrationToQuantitativeImageFilter<TInputImage, TMaskImage, TOutputImage>

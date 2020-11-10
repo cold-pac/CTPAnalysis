@@ -23,7 +23,7 @@ namespace itk
 /** \class ConcentrationToQuantitativeImageFilter
  * \brief Calculates quantitative imaging parameters from concentration curves.
  *
- * This filter computes Pk modeling quantitative images from
+ * This filter computes Pk modelling quantitative images from
  * concentration curves. The input volume is a vector image of
  * concentration curves represented in floating point.  The output is
  * a series of floating point images of quantitative parameters.
@@ -203,6 +203,7 @@ protected:
 
   void BeforeThreadedGenerateData();
 
+/* 
 #if ITK_VERSION_MAJOR < 4
   void ThreadedGenerateData( const OutputVolumeRegionType& outputRegionForThread, int threadId );
 
@@ -211,6 +212,10 @@ protected:
                              ThreadIdType threadId );
 
 #endif
+*/
+
+void ThreadedGenerateData( const OutputVolumeRegionType& outputRegionForThread,
+                             ThreadIdType threadId );
 
   //std::vector<float> CalculatePopulationAIF( const size_t time_of_bolus, std::vector<float> timing );
   std::vector<float> CalculatePopulationAIF( std::vector<float> timing, float bolus_arrival_fraction );

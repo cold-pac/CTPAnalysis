@@ -13,6 +13,8 @@
 
 #include "itkConcentrationToQuantitativeImageFilter.h"
 
+#include <iostream>
+
 
 namespace itk
 {
@@ -20,6 +22,14 @@ namespace itk
 template <class TInputImage, class TMaskImage, class TOutputImage>
 ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>::ConcentrationToQuantitativeImageFilter()
 {
+
+  std::cout << "what doesn't work here?????";
+
+  //this is the class constructor isn't it? as evidenced by the fact that the above is outputted first 
+  //ok try this 
+
+  this->DynamicMultiThreadingOff();
+
   m_TE = 0.0f;
   m_FA = 0.0f;
   m_RGD_relaxivity = 4.9E-3f;
@@ -54,6 +64,8 @@ typename ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputIm
 ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 ::MakeOutput(DataObjectPointerArraySizeType idx)
 {
+  std::cout << "please work! \n"; 
+  std::cout << idx << "\n"; 
   if(idx<8)
   {
     return TOutputImage::New().GetPointer();
@@ -64,7 +76,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   } 
   else 
   {
-    return TOutputImage::New().GetPointer(); 
+    return VectorVolumeType::New().GetPointer(); 
   }
 }
 
@@ -266,7 +278,11 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
     {
     // calculate the AIF from the image using the data under the
     // specified mask
-    m_AIF = this->CalculateAverageAIF(inputVectorVolume, maskVolume);
+
+    std::cout << "Does this work? Test 2 \n"; 
+
+    m_AIF = this->CalculateAverageAIF(inputVectorVolume, maskVolume); //not the problem!
+
     }
   else if (m_UsePopulationAIF)
     {
@@ -286,20 +302,25 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
     compute_bolus_arrival_time (m_AIF.size(), &m_AIF[0], m_AIFBATIndex, aif_FirstPeakIndex, aif_MaxSlope);
   }
 
+  std::cout << "Does this work? Test 9? \n"; 
+
   // Compute the area under the curve for the AIF
   m_aifAUC = area_under_curve(timeSize, &m_Timing[0], &m_AIF[0], m_AIFBATIndex, m_AUCTimeInterval);
   //printf("m_aifAUC = %f\n", m_aifAUC);
+
+
+  std::cout << "Does this work? Test 9.5! \n";
+
 }
 
 template <class TInputImage, class TMaskImage, class TOutputImage>
 void
 ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
-#if ITK_VERSION_MAJOR < 4
-::ThreadedGenerateData( const OutputVolumeRegionType & outputRegionForThread, int threadId )
-#else
 ::ThreadedGenerateData( const OutputVolumeRegionType& outputRegionForThread, ThreadIdType threadId )
-#endif
 {
+
+  std::cout << "Does this work? Test 10! \n"; // not outputted 
+
   VectorVoxelType vectorVoxel, fittedVectorVoxel;
 
   float tempK2 = 0.0f;
@@ -788,12 +809,15 @@ ConcentrationToQuantitativeImageFilter<TInputImage, TMaskImage, TOutputImage>
 
 
 // Calculate average AIF according to the AIF mask
+// this is what is throwing the error! 
 template <class TInputImage, class TMaskImage, class TOutputImage>
 std::vector<float>
 ConcentrationToQuantitativeImageFilter<TInputImage, TMaskImage, TOutputImage>
 ::CalculateAverageAIF(const VectorVolumeType*  inputVectorVolume, const MaskVolumeType* maskVolume)
 {
   std::vector<float> averageAIF;
+
+  std::cout << "Does this work? Test 3 \n"; 
 
   VectorVolumeConstIterType inputVectorVolumeIter(inputVectorVolume, inputVectorVolume->GetRequestedRegion() );
   MaskVolumeConstIterType  maskVolumeIter(maskVolume, maskVolume->GetRequestedRegion() );
@@ -806,8 +830,11 @@ ConcentrationToQuantitativeImageFilter<TInputImage, TMaskImage, TOutputImage>
   long            numberOfSamples = inputVectorVolume->GetNumberOfComponentsPerPixel();
   averageAIF = std::vector<float>(numberOfSamples, 0.0);
 
+  std::cout << "Does this work? Test 4 \n"; 
+
   while (!inputVectorVolumeIter.IsAtEnd() )
     {
+    //std::cout << "Does this work? Test 5 \n"; 
     if (maskVolumeIter.Get()!=0) // Mask pixel with value !0 will is part of AIF
       {
       numberVoxels++;
@@ -822,10 +849,19 @@ ConcentrationToQuantitativeImageFilter<TInputImage, TMaskImage, TOutputImage>
     ++inputVectorVolumeIter;
     }
 
+
+  std::cout << "Does this work? Test 6 \n"; 
+
   for(long i = 0; i < numberOfSamples; i++)
     {
     averageAIF[i] /= (double)numberVoxels;
     }
+
+  std::cout << "Does this work? Test 7 \n"; 
+
+
+  for (std::vector<float>::const_iterator i = averageAIF.begin(); i != averageAIF.end(); ++i)
+    std::cout << *i << ' ';
 
   return averageAIF;
 }

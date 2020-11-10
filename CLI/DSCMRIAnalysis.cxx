@@ -189,7 +189,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
   typedef itk::VectorImage<float, VectorVolumeDimension>     FloatVectorVolumeType;
   typedef typename VectorVolumeType::RegionType              VectorVolumeRegionType;
   typedef itk::ImageFileReader<VectorVolumeType>             VectorVolumeReaderType;
-  typedef itk::ImageFileWriter<FloatVectorVolumeType>        VectorVolumeWriterType;
+  typedef itk::ImageFileWriter<VectorVolumeType>        VectorVolumeWriterType;
 
   const   unsigned int MaskVolumeDimension = 3;
   typedef T2                                                   MaskVolumePixelType;
@@ -354,7 +354,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
   converter->SetRGD_relaxivity(RelaxivityValue);
   converter->SetS0GradThresh(S0GradValue);
   itk::PluginFilterWatcher watchConverter(converter, "Concentrations",  CLPProcessInformation,  1.0 / 20.0, 0.0);
-  converter->Update();
+  converter->Update();  
 
   if(OutputConcentrationsImageFileName != "")
     {
@@ -370,13 +370,17 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     multiVolumeWriter->SetUseCompression(1);
     multiVolumeWriter->Update();
     }
+    */ 
 
-  */ 
+  //convert VectorVolumeType to FloatVectorVolumeType without messing up above code
+  //TODO: convert pixel Type to float, creating a FloatVectorVolumeType
+
+
 
   //Calculate parameters
-  typedef itk::ConcentrationToQuantitativeImageFilter<FloatVectorVolumeType, MaskVolumeType, OutputVolumeType> QuantifierType;
+  typedef itk::ConcentrationToQuantitativeImageFilter<VectorVolumeType, MaskVolumeType, OutputVolumeType> QuantifierType;
   typename QuantifierType::Pointer quantifier = QuantifierType::New();
-  quantifier->SetInput(converter->GetOutput());
+  quantifier->SetInput(inputVectorVolume);
   if (usingPrescribedAIF)
     {
     quantifier->SetPrescribedAIF(prescribedAIFTiming, prescribedAIF);
@@ -389,30 +393,56 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     }
   else 
     {
+    
+    std::cout << "Test 1 \n"; //outputed !
+
     quantifier->SetAIFMask(aifMaskVolume );
+
     }
 
+  std::cout << "Test 1 \n";
+
   quantifier->SetAUCTimeInterval(AUCTimeInterval);
+  std::cout << "Test 1 \n";
   quantifier->SetTiming(Timing);
+  std::cout << "Test 1 \n";
   quantifier->SetfTol(FTolerance);
+  std::cout << "Test 1 \n";
   quantifier->SetgTol(GTolerance);
+  std::cout << "Test 1 \n";
   quantifier->SetxTol(XTolerance);
+  std::cout << "Test 1 \n";
   quantifier->Setepsilon(Epsilon);
+  std::cout << "Test 1 \n";
   quantifier->SetmaxIter(MaxIter);
+  std::cout << "Test 1 \n";
   quantifier->SetconstantBAT(ConstantBAT);
+  std::cout << "Test 1 \n";
   quantifier->SetBATCalculationMode(BATCalculationMode);
+  std::cout << "Test 1 \n";
+
+  
   if(ROIMaskFileName != "")
     {
     quantifier->SetROIMask(roiMaskVolume);
+    std::cout << "Test 1 - a \n";
     }
 
     {
     quantifier->SetModelType(itk::LMCostFunction::TOFTS_2_PARAMETER);
     }
   quantifier->SetMaskByRSquared(OutputRSquaredFileName.empty());
+  std::cout << "Test 1 - b \n";
 
+  
   itk::PluginFilterWatcher watchQuantifier(quantifier, "Quantifying",  CLPProcessInformation,  19.0 / 20.0, 1.0 / 20.0);
+  std::cout << "Test 1 - b 1 \n";
+  
+  // this is where the error is!
   quantifier->Update();
+  // this is where the error is!
+
+  std::cout << "Test 1 - c  \n";
 
   //set output
   if (!OutputK2FileName.empty())
@@ -482,7 +512,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     {
     // need to initialize the attributes, otherwise Slicer treats 
     //  this as a Vector volume, not MultiVolume
-    FloatVectorVolumeType::Pointer fittedVolume = quantifier->GetFittedDataOutput();
+    typename VectorVolumeType::Pointer fittedVolume = quantifier->GetFittedDataOutput();
     fittedVolume->SetMetaDataDictionary(inputVectorVolume->GetMetaDataDictionary());
 
     typename VectorVolumeWriterType::Pointer multiVolumeWriter

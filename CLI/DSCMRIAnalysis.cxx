@@ -10,7 +10,7 @@
 
 #include "itkPluginUtilities.h"
 
-#include "itkSignalIntensityToConcentrationImageFilter.h"
+// #include "itkSignalIntensityToConcentrationImageFilter.h"
 #include "itkConcentrationToQuantitativeImageFilter.h"
 
 #include <sstream>
@@ -98,6 +98,8 @@ std::vector<float> GetTiming(itk::MetaDataDictionary& dictionary)
 }
 
 
+
+//TODO: come back to this!
 // Read an AIF from a CSV style file.  Columns are timing and concentration.
 //
 //
@@ -249,6 +251,9 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
   //   }
 
   // FlipAngle
+  //converter uses flip angle
+  // is this needed? 
+  /* 
   float FAValue = 0.0;
   try 
     {
@@ -262,8 +267,12 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     return EXIT_FAILURE;
     }
 
+  */ 
+
   // TODO: remove 
+  // converter uses echo time - not needed! 
   // Echo Time
+  /*
   float TEValue = 0.0;
   try 
     {
@@ -276,6 +285,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
             << " does not contain sufficient attributes to support algorithms.");
     return EXIT_FAILURE;
     }
+  */ 
 
   //Read AIF mask
   typename MaskVolumeReaderType::Pointer aifMaskVolumeReader = MaskVolumeReaderType::New();
@@ -311,6 +321,8 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     roiMaskVolume = resampler->GetOutput();
     }
 
+
+
   //Read prescribed aif
   bool usingPrescribedAIF = false;
   std::vector<float> prescribedAIFTiming;
@@ -328,6 +340,8 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     return EXIT_FAILURE;
     }
   
+
+
   // TODO: remove 
   // unnecessary for CT Perfusion -> already produces a time-density curve 
   
@@ -379,8 +393,11 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
 
   //Calculate parameters
   typedef itk::ConcentrationToQuantitativeImageFilter<VectorVolumeType, MaskVolumeType, OutputVolumeType> QuantifierType;
+
   typename QuantifierType::Pointer quantifier = QuantifierType::New();
+
   quantifier->SetInput(inputVectorVolume);
+
   if (usingPrescribedAIF)
     {
     quantifier->SetPrescribedAIF(prescribedAIFTiming, prescribedAIF);
@@ -393,6 +410,8 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     }
   else 
     {
+      
+    //test this path first: 
     
     std::cout << "Test 1 \n"; //outputed !
 
@@ -400,26 +419,25 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
 
     }
 
-  std::cout << "Test 1 \n";
 
   quantifier->SetAUCTimeInterval(AUCTimeInterval);
-  std::cout << "Test 1 \n";
+  
   quantifier->SetTiming(Timing);
-  std::cout << "Test 1 \n";
+ 
   quantifier->SetfTol(FTolerance);
-  std::cout << "Test 1 \n";
+  
   quantifier->SetgTol(GTolerance);
-  std::cout << "Test 1 \n";
+ 
   quantifier->SetxTol(XTolerance);
-  std::cout << "Test 1 \n";
+  
   quantifier->Setepsilon(Epsilon);
-  std::cout << "Test 1 \n";
+ 
   quantifier->SetmaxIter(MaxIter);
-  std::cout << "Test 1 \n";
+  
   quantifier->SetconstantBAT(ConstantBAT);
-  std::cout << "Test 1 \n";
+  
   quantifier->SetBATCalculationMode(BATCalculationMode);
-  std::cout << "Test 1 \n";
+ 
 
   
   if(ROIMaskFileName != "")
@@ -431,18 +449,13 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     {
     quantifier->SetModelType(itk::LMCostFunction::TOFTS_2_PARAMETER);
     }
+    
   quantifier->SetMaskByRSquared(OutputRSquaredFileName.empty());
-  std::cout << "Test 1 - b \n";
 
   
   itk::PluginFilterWatcher watchQuantifier(quantifier, "Quantifying",  CLPProcessInformation,  19.0 / 20.0, 1.0 / 20.0);
-  std::cout << "Test 1 - b 1 \n";
-  
-  // this is where the error is!
   quantifier->Update();
-  // this is where the error is!
 
-  std::cout << "Test 1 - c  \n";
 
   //set output
   if (!OutputK2FileName.empty())
@@ -475,7 +488,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
   if (!OutputAUCFileName.empty())
     {
     typename OutputVolumeWriterType::Pointer aucwriter = OutputVolumeWriterType::New();
-    aucwriter->SetInput(quantifier->GetAUCOutput() );
+    aucwriter->SetInput(quantifier->GetAUCOutput());
     aucwriter->SetFileName(OutputAUCFileName.c_str() );
     aucwriter->SetUseCompression(1);
     aucwriter->Update();

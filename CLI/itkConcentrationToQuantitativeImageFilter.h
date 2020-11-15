@@ -25,7 +25,8 @@ namespace itk
  *
  * This filter computes Pk modelling quantitative images from
  * concentration curves. The input volume is a vector image of
- * concentration curves represented in floating point.  The output is
+ * concentration curves represented in floating point. (may not be in floating point because I removed the conversion filter) 
+ * The output is
  * a series of floating point images of quantitative parameters.
  *
  * An second input, specifying the location of the arterial input
@@ -53,6 +54,9 @@ public:
   typedef typename VectorVolumeType::RegionType   VectorVolumeRegionType;
   typedef typename VectorVolumeType::SizeType     VectorVolumeSizeType;
   typedef itk::ImageRegionConstIterator<VectorVolumeType> VectorVolumeConstIterType;
+ // A multi-dimensional iterator templated over image type that walks a region of pixels.
+
+
   typedef itk::ImageRegionIterator<VectorVolumeType> VectorVolumeIterType;
 
   typedef TMaskImage                            MaskVolumeType;

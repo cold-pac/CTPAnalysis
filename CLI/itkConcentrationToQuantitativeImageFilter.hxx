@@ -23,8 +23,6 @@ template <class TInputImage, class TMaskImage, class TOutputImage>
 ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>::ConcentrationToQuantitativeImageFilter()
 {
 
-  std::cout << "what doesn't work here?????";
-
   //this is the class constructor isn't it? as evidenced by the fact that the above is outputted first 
   //ok try this 
 
@@ -57,6 +55,9 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>::Con
   this->Superclass::SetNthOutput(7, static_cast<TOutputImage*>(this->MakeOutput(7).GetPointer()));  // MTT
   this->Superclass::SetNthOutput(8, static_cast<TOutputImage*>(this->MakeOutput(8).GetPointer()));  // CBF
   this->Superclass::SetNthOutput(9, static_cast<VectorVolumeType*>(this->MakeOutput(9).GetPointer())); // fitted
+
+  //why is this 1 above the GetOutput number? 
+  //GetOutput is 0-indexed but this isn't? 
 }
 
 template< class TInputImage, class TMaskImage, class TOutputImage >
@@ -64,19 +65,21 @@ typename ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputIm
 ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 ::MakeOutput(DataObjectPointerArraySizeType idx)
 {
-  std::cout << "please work! \n"; 
-  std::cout << idx << "\n"; 
   if(idx<8)
   {
+    std::cout << "what is idx? \n"; 
     return TOutputImage::New().GetPointer();
   }
   else if (idx==8)
   {
+    std::cout << "what is idx?2 \n";
     return VectorVolumeType::New().GetPointer();
   } 
   else 
   {
-    return VectorVolumeType::New().GetPointer(); 
+    std::cout << "what is idx?3 \n"; 
+    //return VectorVolumeType::New().GetPointer(); 
+    //return; 
   }
 }
 
@@ -305,7 +308,9 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   std::cout << "Does this work? Test 9? \n"; 
 
   // Compute the area under the curve for the AIF
+  // why? 
   m_aifAUC = area_under_curve(timeSize, &m_Timing[0], &m_AIF[0], m_AIFBATIndex, m_AUCTimeInterval);
+  
   //printf("m_aifAUC = %f\n", m_aifAUC);
 
 
@@ -319,7 +324,6 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 ::ThreadedGenerateData( const OutputVolumeRegionType& outputRegionForThread, ThreadIdType threadId )
 {
 
-  std::cout << "Does this work? Test 10! \n"; // not outputted 
 
   VectorVoxelType vectorVoxel, fittedVectorVoxel;
 
@@ -354,9 +358,19 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   OutputVolumeIterType batVolumeIter(this->GetBATOutput(), outputRegionForThread);
 
   //set up optimizer and cost function
+  
+
+  //relaxivity change for each voxel is approximated as a linear combination ... (equation 1)
+  //determine K1 and K2 by fitting ordinary least squares to equation 1 
+
+
   itk::LevenbergMarquardtOptimizer::Pointer optimizer = itk::LevenbergMarquardtOptimizer::New();
   LMCostFunction::Pointer                   costFunction = LMCostFunction::New();
   int timeSize = (int)inputVectorVolume->GetNumberOfComponentsPerPixel();
+  // each pixel has 14 'components' i.e. acquisition times. 
+
+  std::cout << "this is the time size: " << timeSize << "\n"; 
+
 
   std::vector<float> timeMinute;
   timeMinute = m_Timing;
@@ -380,12 +394,16 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   // std::cout << "AIF RMS: " << aifRMS  << std::endl;
 
 
-  VectorVoxelType shiftedVectorVoxel(timeSize);
+  VectorVoxelType shiftedVectorVoxel(timeSize); //as in also 14 components 
   int shift;
   unsigned int shiftStart = 0, shiftEnd = 0;
   bool success = true;
+
+
+  /*
   while (!k2VolumeIter.IsAtEnd())
     {
+
     success = true;
     tempK2 = tempK1 = tempMaxSlope = tempAUC = tempMTT = tempCBF = 0.0;
     BATIndex = FirstPeakIndex = 0;
@@ -393,6 +411,9 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
     if(!this->GetROIMask() || (this->GetROIMask() && roiMaskVolumeIter.Get()))
       {
       vectorVoxel = inputVectorVolumeIter.Get();
+
+      //std::cout << vectorVoxel.GetSize();
+
       fittedVectorVoxel = inputVectorVolumeIter.Get();
       // dump a specific voxel
       // std::cout << "VectorVoxel = " << vectorVoxel;
@@ -448,7 +469,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
       //shiftedVectorVoxel 
 
       // Calculate parameter k2, k1, and fpv
-      //fpv? 
+      //fpv = pv correction factor, AIF Partial Volume
       //must remove k2 and k1 from the AUC to get relative CBV etc 
       double rSquared = 0.0;
       if (success)
@@ -466,10 +487,10 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
         //itk::LMCostFunction::MeasureType measure =
         itk::LMCostFunction::ArrayType IntCb =
           costFunction->GetFittedFunction(param);
+
         for(size_t i=0;i<fittedVectorVoxel.GetSize();i++)
           {
-            // fittedVectorVoxel[i] = shiftedVectorVoxel[i]+tempK2*IntCb[i];
-            // does commenting out this do it? 
+            fittedVectorVoxel[i] = shiftedVectorVoxel[i]+tempK2*IntCb[i];
           }
         
         // Shift the current time course to align with the BAT of the AIF
@@ -521,11 +542,14 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
           {
           sum += shiftedVectorVoxel[i];
           sumSquared += (shiftedVectorVoxel[i]*shiftedVectorVoxel[i]);
-	  //sum += vectorVoxel[i];
+	        //sum += vectorVoxel[i];
           //sumSquared += (vectorVoxel[i]*vectorVoxel[i]);          
-	  }
+	        }
+
         double SStot = sumSquared - sum*sum/(double)shiftedVectorVoxel.GetSize();
-	//double SStot = sumSquared - sum*sum/(double)vectorVoxel.GetSize();     
+	      //double SStot = sumSquared - sum*sum/(double)vectorVoxel.GetSize();     
+	      //double SStot = sumSquared - sum*sum/(double)vectorVoxel.GetSize();     
+	      //double SStot = sumSquared - sum*sum/(double)vectorVoxel.GetSize();     
 
         rSquared = 1.0 - (SSerr / SStot);
      
@@ -535,6 +559,8 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
       if (success)
         {
 
+        
+        std::cout << "Does this work? " << "\n"; 
 
         tempAUC =
           (area_under_curve(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) );
@@ -618,7 +644,97 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
       }
 
     progress.CompletedPixel();
+
   }
+  */ 
+  
+
+  
+
+  aucVolumeIter.GoToBegin();
+  mttVolumeIter.GoToBegin();
+  cbfVolumeIter.GoToBegin(); 
+
+
+  while (!aucVolumeIter.IsAtEnd()) {
+
+      vectorVoxel = inputVectorVolumeIter.Get();
+
+      success = true;
+      tempK2 = tempK1 = tempMaxSlope = tempAUC = tempMTT = tempCBF = 0.0;
+      BATIndex = FirstPeakIndex = 0;
+
+
+      // Compute the bolus arrival time and the max slope parameter
+      if (success)
+        {
+          int status;
+          // Compute the bolus arrival time
+          if (m_BATCalculationMode == "UseConstantBAT")
+          {
+            BATIndex = m_constantBAT;
+             status = 1;
+          }
+          else if (m_BATCalculationMode == "PeakGradient")
+          {
+             status = compute_bolus_arrival_time(timeSize, &vectorVoxel[0], BATIndex, FirstPeakIndex, tempMaxSlope);
+          }
+
+        if (!status)
+          {
+          success = false;
+          }
+        }
+     
+     
+      // Shift the current time course to align with the BAT of the AIF
+      // (note the sense of the shift)
+      if (success)
+        {
+        batVolumeIter.Set(BATIndex);
+        shift = m_AIFBATIndex - BATIndex;
+        shiftedVectorVoxel.Fill(0.0);
+        if (shift <= 0)
+          {
+          // AIF BAT before current BAT, should always be the case
+          shiftStart = 0;
+          shiftEnd = vectorVoxel.Size() + shift;
+          }
+        else
+          {
+          success = false;
+          }
+        }
+      if (success)
+        {
+        for (unsigned int i = shiftStart; i < shiftEnd; ++i)
+          {
+          shiftedVectorVoxel[i] = vectorVoxel[i - shift];
+          }
+        }
+
+      
+      tempAUC = (area_under_curve(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) );
+      aucVolumeIter.Set(static_cast<OutputVolumePixelType>(tempAUC) ); 
+      ++aucVolumeIter;
+
+
+      tempMTT = (mean_transit_time(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) );
+      mttVolumeIter.Set(static_cast<OutputVolumePixelType>(tempMTT) );
+      ++mttVolumeIter;
+
+      tempCBF = (cerebral_blood_flow(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) )*60;
+      cbfVolumeIter.Set(static_cast<OutputVolumePixelType>(tempCBF) );
+      ++cbfVolumeIter;
+       
+      ++batVolumeIter;
+      ++inputVectorVolumeIter;
+
+      progress.CompletedPixel(); 
+      
+  }
+
+
 }
 
 // Calculate a population AIF.

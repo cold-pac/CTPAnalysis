@@ -3,15 +3,16 @@
   <category>Quantification</category>
   <title>CTPerfusionAnalysis</title>
   <index>2</index>
-  <description><![CDATA[Analysis of Dynamic Susceptibility Contrast (DSC) MRI. Inputs are a multivolume (vector image) where each voxel contains a time series and a label map (binary image) indicating where to define the arterial input function.\n\n]]></description>
+  <description><![CDATA[Analysis of CT Perfusion. Inputs are a multivolume (vector image) where each voxel contains a time series and a label map (binary image) indicating where to define the arterial input function.\n\n]]></description>
   <version>0.0.1</version>
   <documentation-url>http://slicer.org/slicerWiki/index.php/Documentation/Nightly/Modules/DSC_MRI_Analysis</documentation-url>
   <license/>
   <contributor>Xiao Da (MGH), Yangming Ou (MGH), Andriy Fedorov (BWH), Steve Pieper (Isomics), Jayashree Kalpathy-Cramer (MGH)  </contributor>
   <acknowledgements><![CDATA[This work is part of the National Alliance for Medical Image Computing (NA-MIC), funded by the National Institutes of Health through the NIH Roadmap for Medical Research, and by National Cancer Institute as part of the Quantitative Imaging Network initiative (U01CA154601) and QIICR (U24CA180918).]]></acknowledgements>
   <parameters>
-    <label>DSC Parameters</label>
-    <description><![CDATA[Parameters used for DSC MRI Analysis]]></description>
+    <label>CTP Parameters</label>
+    <description><![CDATA[Parameters used for CTP Analysis]]></description>
+    <!--
     <float hidden="true">
       <name>RelaxivityValue</name>   
       <description><![CDATA[Contrast agent relaxivity value. Default value corresponds to Gd-DPTA (Magnevist) at 3T.]]></description>
@@ -68,6 +69,7 @@
       <channel>input</channel>
       <default>200</default>      
     </float>
+    -->
     <float>
       <name>AUCTimeInterval</name>   
       <description><![CDATA[CBV and CBF Time Interval value.]]></description>
@@ -119,6 +121,7 @@
       <description><![CDATA[Prescribed arterial input function (AIF). AIF can either be calculated from the input using the aifMask option or can be prescribed directly in concentration units using the prescribedAIF option.]]></description>
     </measurement>
     
+    <!--
     <image>
       <name>OutputK2FileName</name>
       <longflag>outputK2</longflag>
@@ -140,6 +143,7 @@
       <channel>output</channel>      
       <description><![CDATA[Output maximum slope in the time series curve of each voxel.]]></description>
     </image>
+      -->
     <image>
       <name>OutputAUCFileName</name>
       <longflag>outputAUC</longflag>
@@ -202,7 +206,8 @@
       <channel>output</channel>
       <longflag>concentrations</longflag>
       <description><![CDATA[Output Concentrations 4D Image (txyz)]]></description>
-    </image>	 
+    </image>	
+    <!--
     <image type="dynamic-contrast-enhanced">
       <name>OutputFittedDataImageFileName</name>
       <label>Output Fitted Data 4D Image</label>
@@ -210,5 +215,6 @@
       <longflag>fitted</longflag>
       <description><![CDATA[Output Fitted Data 4D Image (txyz)]]></description>
     </image>	 
+     --> 
   </parameters>
 </executable>

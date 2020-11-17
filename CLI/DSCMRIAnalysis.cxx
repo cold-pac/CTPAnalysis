@@ -424,6 +424,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
   
   quantifier->SetTiming(Timing);
  
+  /* 
   quantifier->SetfTol(FTolerance);
   
   quantifier->SetgTol(GTolerance);
@@ -433,8 +434,10 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
   quantifier->Setepsilon(Epsilon);
  
   quantifier->SetmaxIter(MaxIter);
+  */
   
   quantifier->SetconstantBAT(ConstantBAT);
+  
   
   quantifier->SetBATCalculationMode(BATCalculationMode);
  
@@ -458,6 +461,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
 
 
   //set output
+  /*
   if (!OutputK2FileName.empty())
     {
     typename OutputVolumeWriterType::Pointer k2writer = OutputVolumeWriterType::New();
@@ -484,6 +488,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     maxSlopewriter->SetUseCompression(1);
     maxSlopewriter->Update();
     }
+    */ 
 
   if (!OutputAUCFileName.empty())
     {
@@ -512,6 +517,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     cbfwriter->Update();
     }
 
+  /* 
   if (!OutputRSquaredFileName.empty())
     {
     typename OutputVolumeWriterType::Pointer rsqwriter =OutputVolumeWriterType::New();
@@ -535,6 +541,8 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     multiVolumeWriter->SetUseCompression(1);
     multiVolumeWriter->Update();
     }
+
+  */ 
 
   if (!OutputBolusArrivalTimeImageFileName.empty())
     {

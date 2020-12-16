@@ -10,10 +10,6 @@ set(MODULE_INCLUDE_DIRECTORIES
 #-----------------------------------------------------------------------------
 set(MODULE_SRCS
   ${MODULE_NAME}.cxx
-  itkSignalIntensityToS0ImageFilter.h
-  itkSignalIntensityToS0ImageFilter.hxx
-  itkSignalIntensityToConcentrationImageFilter.h
-  itkSignalIntensityToConcentrationImageFilter.h
   itkConcentrationToQuantitativeImageFilter.h
   itkConcentrationToQuantitativeImageFilter.hxx
   )

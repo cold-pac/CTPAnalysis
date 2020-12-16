@@ -60,6 +60,29 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>::Con
   //GetOutput is 0-indexed but this isn't? 
 }
 
+
+
+float integrate(float* yValues, std::vector<float>& xValues)
+{
+  float area= 0.0f;
+
+  int x; 
+  
+  for (x = 0; x < (xValues.size() - 1); x++) {
+   
+    area += ((xValues[x + 1] - xValues[x]) * (yValues[x] + yValues[x + 1]) )/ 2;
+
+  }
+  
+  return area;
+
+}
+
+
+
+
+
+
 template< class TInputImage, class TMaskImage, class TOutputImage >
 typename ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>::DataObjectPointer
 ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
@@ -67,17 +90,14 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 {
   if(idx<8)
   {
-    std::cout << "what is idx? \n"; 
     return TOutputImage::New().GetPointer();
   }
   else if (idx==8)
   {
-    std::cout << "what is idx?2 \n";
     return VectorVolumeType::New().GetPointer();
   } 
   else 
   {
-    std::cout << "what is idx?3 \n"; 
     //return VectorVolumeType::New().GetPointer(); 
     //return; 
   }
@@ -217,7 +237,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   const VectorVolumeType* inputVectorVolume = this->GetInput();
   const MaskVolumeType* maskVolume = this->GetAIFMask();
 
-  std::cout << "Model type: " << m_ModelType << std::endl;
+  //std::cout << "Model type: " << m_ModelType << std::endl;
 
   int timeSize = (int)inputVectorVolume->GetNumberOfComponentsPerPixel();
 
@@ -282,7 +302,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
     // calculate the AIF from the image using the data under the
     // specified mask
 
-    std::cout << "Does this work? Test 2 \n"; 
+    //std::cout << "Does this work? Test 2 \n"; 
 
     m_AIF = this->CalculateAverageAIF(inputVectorVolume, maskVolume); //not the problem!
 
@@ -305,16 +325,18 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
     compute_bolus_arrival_time (m_AIF.size(), &m_AIF[0], m_AIFBATIndex, aif_FirstPeakIndex, aif_MaxSlope);
   }
 
-  std::cout << "Does this work? Test 9? \n"; 
+  //std::cout << "Does this work? Test 9? \n"; 
 
   // Compute the area under the curve for the AIF
   // why? 
-  m_aifAUC = area_under_curve(timeSize, &m_Timing[0], &m_AIF[0], m_AIFBATIndex, m_AUCTimeInterval);
+  //m_aifAUC = area_under_curve(timeSize, &m_Timing[0], &m_AIF[0], m_AIFBATIndex, m_AUCTimeInterval);
+  // (integrate(const_cast<float *>(vectorVoxel.GetDataPointer() ), m_Timing) );
+  m_aifAUC = integrate(&m_AIF[0], m_Timing); 
   
   //printf("m_aifAUC = %f\n", m_aifAUC);
 
 
-  std::cout << "Does this work? Test 9.5! \n";
+  //std::cout << "Does this work? Test 9.5! \n";
 
 }
 
@@ -369,7 +391,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   int timeSize = (int)inputVectorVolume->GetNumberOfComponentsPerPixel();
   // each pixel has 14 'components' i.e. acquisition times. 
 
-  std::cout << "this is the time size: " << timeSize << "\n"; 
+  //std::cout << "this is the time size: " << timeSize << "\n"; 
 
 
   std::vector<float> timeMinute;
@@ -666,6 +688,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 
 
       // Compute the bolus arrival time and the max slope parameter
+      /* 
       if (success)
         {
           int status;
@@ -713,17 +736,18 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
           }
         }
 
+      */ 
       
-      tempAUC = (area_under_curve(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) );
+      tempAUC = (integrate(const_cast<float *>(vectorVoxel.GetDataPointer() ), m_Timing) );
       aucVolumeIter.Set(static_cast<OutputVolumePixelType>(tempAUC) ); 
       ++aucVolumeIter;
 
 
-      tempMTT = (mean_transit_time(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) );
+      tempMTT = (mean_transit_time(timeSize, &m_Timing[0], const_cast<float *>(vectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) );
       mttVolumeIter.Set(static_cast<OutputVolumePixelType>(tempMTT) );
       ++mttVolumeIter;
 
-      tempCBF = (cerebral_blood_flow(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) )*60;
+      tempCBF = (cerebral_blood_flow(timeSize, &m_Timing[0], const_cast<float *>(vectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) )*60;
       cbfVolumeIter.Set(static_cast<OutputVolumePixelType>(tempCBF) );
       ++cbfVolumeIter;
        
@@ -940,7 +964,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage, TMaskImage, TOutputImage>
 {
   std::vector<float> averageAIF;
 
-  std::cout << "Does this work? Test 3 \n"; 
+  //std::cout << "Does this work? Test 3 \n"; 
 
   VectorVolumeConstIterType inputVectorVolumeIter(inputVectorVolume, inputVectorVolume->GetRequestedRegion() );
   MaskVolumeConstIterType  maskVolumeIter(maskVolume, maskVolume->GetRequestedRegion() );
@@ -953,7 +977,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage, TMaskImage, TOutputImage>
   long            numberOfSamples = inputVectorVolume->GetNumberOfComponentsPerPixel();
   averageAIF = std::vector<float>(numberOfSamples, 0.0);
 
-  std::cout << "Does this work? Test 4 \n"; 
+  //std::cout << "Does this work? Test 4 \n"; 
 
   while (!inputVectorVolumeIter.IsAtEnd() )
     {
@@ -973,18 +997,18 @@ ConcentrationToQuantitativeImageFilter<TInputImage, TMaskImage, TOutputImage>
     }
 
 
-  std::cout << "Does this work? Test 6 \n"; 
+  //std::cout << "Does this work? Test 6 \n"; 
 
   for(long i = 0; i < numberOfSamples; i++)
     {
     averageAIF[i] /= (double)numberVoxels;
     }
 
-  std::cout << "Does this work? Test 7 \n"; 
+  //std::cout << "Does this work? Test 7 \n"; 
 
 
   for (std::vector<float>::const_iterator i = averageAIF.begin(); i != averageAIF.end(); ++i)
-    std::cout << *i << ' ';
+    //std::cout << *i << ' ';
 
   return averageAIF;
 }

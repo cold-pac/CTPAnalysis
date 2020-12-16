@@ -15,7 +15,7 @@
 #include "itkVectorImage.h"
 #include "itkImageRegionIterator.h"
 #include "itkCastImageFilter.h"
-#include "PkSolver.h"
+#include "../PkSolver/PkSolver.h"
 #include <string>
 
 namespace itk

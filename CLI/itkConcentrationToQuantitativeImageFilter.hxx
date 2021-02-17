@@ -7,6 +7,11 @@
 #include "itkProgressReporter.h"
 #include "itkLevenbergMarquardtOptimizer.h"
 #include "vnl/vnl_math.h"
+#include "vnl/vnl_matrix.h"
+#include "vnl/vnl_diag_matrix.h" 
+//"stores a diagonal matrix as a single vector"
+#include "vnl/vnl_vector.h"
+#include "vnl/algo/vnl_svd.h"
 
 // work around compile error on Windows
 #define M_PI 3.1415926535897932384626433832795
@@ -61,14 +66,108 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>::Con
 }
 
 
+bool check_tissue(const float* concentration, int timeSize) {
 
-float integrate(float* yValues, std::vector<float>& xValues)
+
+  int x = 0; 
+
+  for (x = 0; x < timeSize; x++) {
+    if (concentration[x] < 0 || concentration[x] > 100) {
+
+      return false; 
+
+    }
+  }
+
+
+  return true; 
+} 
+
+
+// start with time to peak --> should be really red on the left hemisphere 
+// fit to some sort of curve 
+
+//apply 3 x 3 Guassian filter (voxel, 3 x 3 box around that, look at the distribution/mean, make them all the same )
+
+
+float area_under_curve_2(int signalSize, 
+                       const float* timeAxis,
+                       const float* concentration, 
+                       int BATIndex, 
+                       float aucTimeInterval)
+{ 	
+  float auc = 0.0f;
+  if(BATIndex>=signalSize) return auc;
+  //std::cerr << std::endl << "BATIndex:"<<BATIndex << std::endl;	
+	
+  int lastIndex = BATIndex;
+  //std::cerr << std::endl << "timeAxis[0]:"<< timeAxis[0] << std::endl;	
+  float targetTime = timeAxis[BATIndex]+aucTimeInterval; 
+  //std::cerr << std::endl << "targetTime:"<< targetTime << std::endl;	
+  float tempTime = timeAxis[BATIndex+1];
+  //std::cerr << std::endl << "tempTime:"<< tempTime << std::endl;	
+
+  //find the last index
+  while((tempTime<targetTime)&&(lastIndex<(signalSize-2)))
+    {	
+    lastIndex+=1;		
+    tempTime = timeAxis[lastIndex+1] ;
+    //std::cerr << std::endl << "tempTime"<<tempTime << std::endl;
+    }	
+		
+  //if ((lastIndex-BATIndex)==0) return auc = aucTimeInterval*concentration[BATIndex];
+
+  //for (int i=0; i<signalSize; i++)
+    //{ printf("conc(%d) = %f\n", i, (float) concentration[i]) ;}
+
+  //extract time and concentration
+  float * concentrationValues = new float[lastIndex-BATIndex+2]();
+  float * timeValues = new float[lastIndex-BATIndex+2]();
+
+  //find the extra time and concentration value for auc
+  float y1, y2, x1, x2, slope, b, targetX, targetY;
+  y2 = concentration[lastIndex+1];
+  y1 = concentration[lastIndex];
+  x2 = timeAxis[lastIndex+1];
+  x1 = timeAxis[lastIndex];
+  slope = (y2-y1)/(x2-x1);
+  b = y1-slope*x1;
+  targetX = timeAxis[BATIndex] + aucTimeInterval;
+  targetY = slope*targetX+b;
+  if(targetX>timeAxis[signalSize-1])
+    {
+    targetX = timeAxis[lastIndex+1];
+    targetY = concentration[lastIndex+1];
+    }
+  concentrationValues[lastIndex-BATIndex+1] = targetY; //put the extra value at the end
+  timeValues[lastIndex-BATIndex+1] = targetX; //put the extra time value at the end
+	
+	//printf("lastIndex is %f\n", (float)lastIndex);
+  for(int i=0; i<(lastIndex-BATIndex+1); ++i)
+    {
+    concentrationValues[i] = concentration[i+BATIndex];
+    timeValues[i] = timeAxis[i+BATIndex];
+    //printf("lastIndex is %f,%f\n", (float) concentrationValues[i],(float)timeValues[i]);
+    //printf("lastIndex is %f,%f, %f\n", (float) concentrationValues[i],(float)timeValues[i], (float) concentration[i+BATIndex]);
+    }	
+
+  //get auc
+  auc = intergrate(concentrationValues,timeValues,(lastIndex-BATIndex+2));
+  
+  delete [] concentrationValues;
+  delete [] timeValues;
+  return auc;
+}
+
+
+
+float integrate(float* yValues, float * xValues, int size)
 {
   float area= 0.0f;
 
   int x; 
   
-  for (x = 0; x < (xValues.size() - 1); x++) {
+  for (x = 0; x < (size - 1); x++) {
    
     area += ((xValues[x + 1] - xValues[x]) * (yValues[x] + yValues[x + 1]) )/ 2;
 
@@ -79,6 +178,82 @@ float integrate(float* yValues, std::vector<float>& xValues)
 }
 
 
+float clean_up(int signalSize, const float* timeAxis, const float* concentration, int BATIndex, float aucTimeInterval) {
+
+
+  int x = 0; 
+
+  for (x = 0; x < signalSize; x++) {
+    if (concentration[x] < 0 || concentration[x] > 70) {
+      return 0.0; 
+    }
+  }
+
+
+  return area_under_curve_2(signalSize, timeAxis, concentration, BATIndex,  aucTimeInterval);  
+
+
+}
+
+float calculate_CBV(float* yValues, std::vector<float>& xValues)
+{
+
+  float baseline; 
+
+  baseline = yValues[0]; 
+
+
+  float peak, time_of_peak;
+
+  int x; 
+
+  peak = 0.0; 
+  
+  for (x = 0; x < (xValues.size() - 1); x++) {
+    
+    if (yValues[x] > peak) {
+        peak = yValues[x]; 
+        time_of_peak = xValues[x]; 
+    }
+
+    if (yValues[x] < 0 || yValues[x] > 70) {
+      return 0.0; 
+    }
+    
+  }
+  
+  return time_of_peak;
+
+}
+
+
+
+
+float time_to_peak(float* yValues, std::vector<float>& xValues)
+{
+
+  float peak, time_of_peak;
+
+  int x; 
+
+  peak = 0.0; 
+  
+  for (x = 0; x < (xValues.size() - 1); x++) {
+    
+    if (yValues[x] > peak) {
+        peak = yValues[x]; 
+        time_of_peak = xValues[x]; 
+    }
+
+    if (yValues[x] < 0 || yValues[x] > 70) {
+      return 0.0; 
+    }
+    
+  }
+  
+  return time_of_peak;
+
+}
 
 
 
@@ -325,18 +500,11 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
     compute_bolus_arrival_time (m_AIF.size(), &m_AIF[0], m_AIFBATIndex, aif_FirstPeakIndex, aif_MaxSlope);
   }
 
-  //std::cout << "Does this work? Test 9? \n"; 
 
   // Compute the area under the curve for the AIF
-  // why? 
-  //m_aifAUC = area_under_curve(timeSize, &m_Timing[0], &m_AIF[0], m_AIFBATIndex, m_AUCTimeInterval);
-  // (integrate(const_cast<float *>(vectorVoxel.GetDataPointer() ), m_Timing) );
-  m_aifAUC = integrate(&m_AIF[0], m_Timing); 
-  
+  m_aifAUC = area_under_curve(timeSize, &m_Timing[0], &m_AIF[0], m_AIFBATIndex, m_AUCTimeInterval);
   //printf("m_aifAUC = %f\n", m_aifAUC);
-
-
-  //std::cout << "Does this work? Test 9.5! \n";
+  
 
 }
 
@@ -385,14 +553,122 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   //relaxivity change for each voxel is approximated as a linear combination ... (equation 1)
   //determine K1 and K2 by fitting ordinary least squares to equation 1 
 
-
+  /* 
   itk::LevenbergMarquardtOptimizer::Pointer optimizer = itk::LevenbergMarquardtOptimizer::New();
   LMCostFunction::Pointer                   costFunction = LMCostFunction::New();
+  */ 
   int timeSize = (int)inputVectorVolume->GetNumberOfComponentsPerPixel();
   // each pixel has 14 'components' i.e. acquisition times. 
 
   //std::cout << "this is the time size: " << timeSize << "\n"; 
 
+
+  /* ok here we go: 
+  Ca array!
+  */ 
+
+
+ //TODO: 
+ //1. check that the m_AIF is actually correct (correct values, is an actual array etc)
+ //2. 
+
+  vnl_matrix<float> camat(timeSize, timeSize); 
+
+  int i, j; 
+
+  for (i = 0; i < timeSize; i++)  {
+    for (j = 0; j < timeSize; j++) {
+      if (j > i) {
+
+        camat(i, j) = 0; 
+
+      } else if (i == j) {
+
+        camat(i, j) = m_AIF[0]; //might have to be 0-indexed 
+        //yes...
+        //"R arrays start at 1"
+        //do vnl_matrix's have 0-indexed co-ordinates
+        //better check this!
+        
+      } else if (i > j) {
+
+        camat(i, j) = m_AIF[(i-j)]; 
+
+      }
+    }
+  }
+
+
+  /* 
+
+  float B[timeSize][timeSize] = {0}; 
+
+  for (i = 0; i < timeSize; i++) {
+    for (j = 0; j < timeSize; j++) {
+
+      if (j > i) {
+        B[i][j]
+      }
+
+    }
+  }
+
+  */ 
+
+  //might be a good idea to use different SVD source code
+  //one with better documentation!
+
+  vnl_svd<float> svd (camat); 
+
+  vnl_matrix<float> u, v, d; 
+
+
+  u = svd.U(); 
+  v = svd.V(); 
+  d = svd.W(); // 'd' is the diagonal matrix, i.e. S in the paper!
+  //diagonal matrix with the singular values of Ca 
+  //also sorted decreasingly, no problem there! 
+  // in vnl, this is not a proper vnl_matrix 
+  // this is a "diag_matrix", i.e. a compressed form/ vector!!!!!!!!!!!!!!!!
+
+  //cut off set to some percentage of the maximum singular value of Ca 
+  float psvd = 0.05 * d.max_value(); 
+
+  std::cout << "This is the max value: " << d.max_value() << " " << psvd << "finish!\n"; 
+  //1383.16 --> seems fine 
+
+  //can use "vnl_diagonal_matrix" as well 
+  vnl_vector<float> vector_sr (timeSize, 0); //values initialised as 0!
+  vnl_vector<float> vector_d (timeSize); 
+
+  vector_d = d.get_diagonal(); 
+  //diagonal is longer than timeSize... 
+  //isn't it 
+
+  //this is where the error is I THINK! 
+
+
+  for (i = 0; i < timeSize; i++) {
+
+    if (vector_d.get(i) > psvd) {
+      vector_sr.put(i, 1/vector_d.get(i)); 
+    }
+
+  }
+
+  vnl_diag_matrix<float> sr(vector_sr); //pretty sure I can do this... 
+  //double check ! 
+
+
+  vnl_matrix<float> ca_inv (timeSize, timeSize); 
+
+
+  //check that this is actually how you multiply! 
+  //c'mon!
+  
+  ca_inv = v * sr * u.transpose(); //fixed !  
+
+  
 
   std::vector<float> timeMinute;
   timeMinute = m_Timing;
@@ -421,258 +697,14 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   unsigned int shiftStart = 0, shiftEnd = 0;
   bool success = true;
 
-
-  /*
-  while (!k2VolumeIter.IsAtEnd())
-    {
-
-    success = true;
-    tempK2 = tempK1 = tempMaxSlope = tempAUC = tempMTT = tempCBF = 0.0;
-    BATIndex = FirstPeakIndex = 0;
-
-    if(!this->GetROIMask() || (this->GetROIMask() && roiMaskVolumeIter.Get()))
-      {
-      vectorVoxel = inputVectorVolumeIter.Get();
-
-      //std::cout << vectorVoxel.GetSize();
-
-      fittedVectorVoxel = inputVectorVolumeIter.Get();
-      // dump a specific voxel
-      // std::cout << "VectorVoxel = " << vectorVoxel;
-
-      // Compute the bolus arrival time and the max slope parameter
-      if (success)
-        {
-          int status;
-          // Compute the bolus arrival time
-          if (m_BATCalculationMode == "UseConstantBAT")
-          {
-            BATIndex = m_constantBAT;
-             status = 1;
-          }
-          else if (m_BATCalculationMode == "PeakGradient")
-          {
-             status = compute_bolus_arrival_time(timeSize, &vectorVoxel[0], BATIndex, FirstPeakIndex, tempMaxSlope);
-          }
-
-        if (!status)
-          {
-          success = false;
-          }
-        }
-     
-     
-      // Shift the current time course to align with the BAT of the AIF
-      // (note the sense of the shift)
-      if (success)
-        {
-        batVolumeIter.Set(BATIndex);
-        shift = m_AIFBATIndex - BATIndex;
-        shiftedVectorVoxel.Fill(0.0);
-        if (shift <= 0)
-          {
-          // AIF BAT before current BAT, should always be the case
-          shiftStart = 0;
-          shiftEnd = vectorVoxel.Size() + shift;
-          }
-        else
-          {
-          success = false;
-          }
-        }
-      if (success)
-        {
-        for (unsigned int i = shiftStart; i < shiftEnd; ++i)
-          {
-          shiftedVectorVoxel[i] = vectorVoxel[i - shift];
-          }
-        }
-
-      //shiftedVectorVoxel 
-
-      // Calculate parameter k2, k1, and fpv
-      //fpv = pv correction factor, AIF Partial Volume
-      //must remove k2 and k1 from the AUC to get relative CBV etc 
-      double rSquared = 0.0;
-      if (success)
-        {
-        pk_solver(timeSize, &timeMinute[0],
-          	const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ),
-          	&m_AIF[0],
-          	tempK2, tempK1, 
-          	m_fTol,m_gTol,m_xTol,
-          	m_epsilon,m_maxIter, 
-            optimizer,costFunction,m_ModelType,m_constantBAT,m_BATCalculationMode);
-
-        itk::LMCostFunction::ParametersType param(2);
-        param[0] = tempK2; param[1] = tempK1;
-        //itk::LMCostFunction::MeasureType measure =
-        itk::LMCostFunction::ArrayType IntCb =
-          costFunction->GetFittedFunction(param);
-
-        for(size_t i=0;i<fittedVectorVoxel.GetSize();i++)
-          {
-            fittedVectorVoxel[i] = shiftedVectorVoxel[i]+tempK2*IntCb[i];
-          }
-        
-        // Shift the current time course to align with the BAT of the AIF
-        // (note the sense of the shift)
-        shiftedVectorVoxel.Fill(0.0);
-
-        if (shift <= 0)
-          {
-          // AIF BAT before current BAT, should always be the case
-          shiftStart = shift*-1.;
-          shiftEnd = vectorVoxel.Size();
-
-          for (unsigned int i = shiftStart; i < shiftEnd; ++i)
-            {
-            shiftedVectorVoxel[i] = fittedVectorVoxel[i + shift];
-            }
-          }
-
-        fittedVolumeIter.Set(shiftedVectorVoxel);
-
-        // Only keep the estimated values if the optimization produced a good answer
-        // Check R-squared:
-        //   R2 = 1 - SSerr / SStot
-        // where
-        //   SSerr = \sum (y_i - f_i)^2
-        //   SStot = \sum (y_i - \bar{y})^2
-        //
-        // Note: R-squared is not a good metric for nonlinear function
-        // fitting. R-squared values are not bound between [0,1] when
-        // fitting nonlinear functions.
-     
-        // SSerr we can get easily from the optimizer
-        double rms = optimizer->GetOptimizer()->get_end_error();
-        double SSerr = rms*rms*shiftedVectorVoxel.GetSize();
-        //double SSerr = rms*rms*vectorVoxel.GetSize();
-     
-        // if we couldn't get rms from the optimizer, we would calculate SSerr ourselves
-        // LMCostFunction::MeasureType residuals = costFunction->GetValue(optimizer->GetCurrentPosition());
-        // double SSerr = 0.0;
-        // for (unsigned int i=0; i < residuals.size(); ++i)
-        //   {
-        //   SSerr += (residuals[i]*residuals[i]);
-        //   }
-     
-        // SStot we need to calculate
-        double sumSquared = 0.0;
-        double sum = 0.0;
-        for (unsigned int i=0; i < shiftedVectorVoxel.GetSize(); ++i)
-          {
-          sum += shiftedVectorVoxel[i];
-          sumSquared += (shiftedVectorVoxel[i]*shiftedVectorVoxel[i]);
-	        //sum += vectorVoxel[i];
-          //sumSquared += (vectorVoxel[i]*vectorVoxel[i]);          
-	        }
-
-        double SStot = sumSquared - sum*sum/(double)shiftedVectorVoxel.GetSize();
-	      //double SStot = sumSquared - sum*sum/(double)vectorVoxel.GetSize();     
-	      //double SStot = sumSquared - sum*sum/(double)vectorVoxel.GetSize();     
-	      //double SStot = sumSquared - sum*sum/(double)vectorVoxel.GetSize();     
-
-        rSquared = 1.0 - (SSerr / SStot);
-     
-        double rSquaredThreshold = 0.15;
-        }
-      // Calculate parameter CBV
-      if (success)
-        {
-
-        
-        std::cout << "Does this work? " << "\n"; 
-
-        tempAUC =
-          (area_under_curve(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) );
-        }
-
-      // Calculate parameter MTT
-      if (success)
-        {
-        tempMTT =
-          (mean_transit_time(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) );
-        }
-     
-      // Calculate parameter CBF
-      if (success)
-        {
-        tempCBF =
-          (cerebral_blood_flow(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) )*60;
-        }
-     
-      // Do we mask the output volumes by the R-squared value?
-      if (m_MaskByRSquared)
-        {
-        // If we were successful, save the estimated values, otherwise
-        // default to zero
-        if (success)
-          {
-          k2VolumeIter.Set(static_cast<OutputVolumePixelType>(tempK2) );
-          k1VolumeIter.Set(static_cast<OutputVolumePixelType>(tempK1) );
-          maxSlopeVolumeIter.Set(static_cast<OutputVolumePixelType>(tempMaxSlope) );
-          aucVolumeIter.Set(static_cast<OutputVolumePixelType>(tempAUC) );
-          mttVolumeIter.Set(static_cast<OutputVolumePixelType>(tempMTT) );
-          cbfVolumeIter.Set(static_cast<OutputVolumePixelType>(tempCBF) );
-          }
-        else
-          {
-          k2VolumeIter.Set(static_cast<OutputVolumePixelType>(0) );
-          k1VolumeIter.Set(static_cast<OutputVolumePixelType>(0) );
-          maxSlopeVolumeIter.Set(static_cast<OutputVolumePixelType>(0) );
-          aucVolumeIter.Set(static_cast<OutputVolumePixelType>(0) );
-          mttVolumeIter.Set(static_cast<OutputVolumePixelType>(0) );
-          cbfVolumeIter.Set(static_cast<OutputVolumePixelType>(0) );
-          }
-        }
-      else
-        {
-        k2VolumeIter.Set(static_cast<OutputVolumePixelType>(tempK2) );
-        k1VolumeIter.Set(static_cast<OutputVolumePixelType>(tempK1) );
-        maxSlopeVolumeIter.Set(static_cast<OutputVolumePixelType>(tempMaxSlope) );
-        aucVolumeIter.Set(static_cast<OutputVolumePixelType>(tempAUC) );
-        mttVolumeIter.Set(static_cast<OutputVolumePixelType>(tempMTT) );
-        cbfVolumeIter.Set(static_cast<OutputVolumePixelType>(tempCBF) );
-        }
-     
-      // RSquared output volume is always written
-      rsqVolumeIter.Set(rSquared);
-      }
-    else
-      {
-      k2VolumeIter.Set(static_cast<OutputVolumePixelType>(0) );
-      k1VolumeIter.Set(static_cast<OutputVolumePixelType>(0) );
-      maxSlopeVolumeIter.Set(static_cast<OutputVolumePixelType>(0) );
-      aucVolumeIter.Set(static_cast<OutputVolumePixelType>(0) );
-      mttVolumeIter.Set(static_cast<OutputVolumePixelType>(0) );
-      cbfVolumeIter.Set(static_cast<OutputVolumePixelType>(0) );
-      }
-
-    ++k2VolumeIter;
-    ++k1VolumeIter;
-    ++maxSlopeVolumeIter;
-    ++aucVolumeIter;
-    ++mttVolumeIter;
-    ++cbfVolumeIter;
-    ++rsqVolumeIter;
-    ++batVolumeIter;
-    ++inputVectorVolumeIter;
-    ++fittedVolumeIter;
-
-    if(this->GetROIMask())
-      {
-      ++roiMaskVolumeIter;
-      }
-
-    progress.CompletedPixel();
-
-  }
-  */ 
   
-
+  vnl_matrix<float> Ct (timeSize, 1); 
+  //m x n, m rows, n columns 
+  //Ct is just the concentration values in the voxel at each time point ! 
+  //vnl_vector<float> Ct(vectorVoxel, timeSize); 
+  vnl_matrix<float> rt_hat(timeSize, timeSize); 
+  int index = 0; 
   
-
   aucVolumeIter.GoToBegin();
   mttVolumeIter.GoToBegin();
   cbfVolumeIter.GoToBegin(); 
@@ -683,12 +715,13 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
       vectorVoxel = inputVectorVolumeIter.Get();
 
       success = true;
+      
       tempK2 = tempK1 = tempMaxSlope = tempAUC = tempMTT = tempCBF = 0.0;
       BATIndex = FirstPeakIndex = 0;
 
 
       // Compute the bolus arrival time and the max slope parameter
-      /* 
+      
       if (success)
         {
           int status;
@@ -735,28 +768,55 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
           shiftedVectorVoxel[i] = vectorVoxel[i - shift];
           }
         }
-
-      */ 
       
-      tempAUC = (integrate(const_cast<float *>(vectorVoxel.GetDataPointer() ), m_Timing) );
+      //need to figure out what's wrong with this! 
+      //tempAUC = (integrate(const_cast<float *>(vectorVoxel.GetDataPointer()), &m_Timing[0], inputVectorVolume->GetNumberOfComponentsPerPixel()) )/(integrate(&m_AIF[0], &m_Timing[0], inputVectorVolume->GetNumberOfComponentsPerPixel())); 
+      tempAUC = clean_up(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval)/m_aifAUC; 
+
       aucVolumeIter.Set(static_cast<OutputVolumePixelType>(tempAUC) ); 
       ++aucVolumeIter;
 
+      
+      for (index = 0; index < timeSize; index++) {
+        Ct(index, 0) = vectorVoxel[index]; 
+      } 
+      //MATRICES IN VNL ARE 0-INDEXED!!! 
 
-      tempMTT = (mean_transit_time(timeSize, &m_Timing[0], const_cast<float *>(vectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) );
+      rt_hat = (ca_inv * Ct); 
+
+      
+      if (check_tissue(const_cast<float *>(vectorVoxel.GetDataPointer()), timeSize)) {
+
+          tempCBF = rt_hat.max_value() * 22; 
+
+      } else {
+
+          tempCBF = 0; 
+
+      }
+
+     
+      
+
+      cbfVolumeIter.Set(static_cast<OutputVolumePixelType>(tempCBF) );
+      ++cbfVolumeIter;
+
+
+      //tempMTT = (mean_transit_time(timeSize, &m_Timing[0], const_cast<float *>(vectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) );
+      //tempMTT = (time_to_peak(const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), m_Timing) );
+
+      tempMTT = tempAUC/tempCBF; 
       mttVolumeIter.Set(static_cast<OutputVolumePixelType>(tempMTT) );
       ++mttVolumeIter;
 
-      tempCBF = (cerebral_blood_flow(timeSize, &m_Timing[0], const_cast<float *>(vectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) )*60;
-      cbfVolumeIter.Set(static_cast<OutputVolumePixelType>(tempCBF) );
-      ++cbfVolumeIter;
+      
        
       ++batVolumeIter;
       ++inputVectorVolumeIter;
 
       progress.CompletedPixel(); 
       
-  }
+  } 
 
 
 }

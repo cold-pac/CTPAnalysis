@@ -434,12 +434,13 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
   quantifier->Setepsilon(Epsilon);
  
   quantifier->SetmaxIter(MaxIter);
-  */
+  
   
   quantifier->SetconstantBAT(ConstantBAT);
   
   
   quantifier->SetBATCalculationMode(BATCalculationMode);
+  */
  
 
   
@@ -453,7 +454,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     quantifier->SetModelType(itk::LMCostFunction::TOFTS_2_PARAMETER);
     }
     
-  quantifier->SetMaskByRSquared(OutputRSquaredFileName.empty());
+ // quantifier->SetMaskByRSquared(OutputRSquaredFileName.empty());
 
   
   itk::PluginFilterWatcher watchQuantifier(quantifier, "Quantifying",  CLPProcessInformation,  19.0 / 20.0, 1.0 / 20.0);
@@ -461,7 +462,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
 
 
   //set output
-  /*
+
   if (!OutputK2FileName.empty())
     {
     typename OutputVolumeWriterType::Pointer k2writer = OutputVolumeWriterType::New();
@@ -470,6 +471,8 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     k2writer->SetUseCompression(1);
     k2writer->Update();
     }
+
+  /* 
 
   if (!OutputK1FileName.empty())
     {
@@ -542,7 +545,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     multiVolumeWriter->Update();
     }
 
-  */ 
+  
 
   if (!OutputBolusArrivalTimeImageFileName.empty())
     {
@@ -553,6 +556,8 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     batwriter->SetUseCompression(1);
     batwriter->Update();
     }
+
+  */ 
 
   return EXIT_SUCCESS;
 }  

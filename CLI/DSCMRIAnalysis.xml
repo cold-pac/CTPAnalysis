@@ -12,7 +12,6 @@
   <parameters>
     <label>CTP Parameters</label>
     <description><![CDATA[Parameters used for CTP Analysis]]></description>
-    <!--
     <float hidden="true">
       <name>RelaxivityValue</name>   
       <description><![CDATA[Contrast agent relaxivity value. Default value corresponds to Gd-DPTA (Magnevist) at 3T.]]></description>
@@ -69,7 +68,6 @@
       <channel>input</channel>
       <default>200</default>      
     </float>
-    -->
     <float>
       <name>AUCTimeInterval</name>   
       <description><![CDATA[CBV and CBF Time Interval value.]]></description>
@@ -121,14 +119,9 @@
       <description><![CDATA[Prescribed arterial input function (AIF). AIF can either be calculated from the input using the aifMask option or can be prescribed directly in concentration units using the prescribedAIF option.]]></description>
     </measurement>
     
-    <!--
-    <image>
-      <name>OutputK2FileName</name>
-      <longflag>outputK2</longflag>
-      <label>Output K2 image</label>
-      <channel>output</channel>      
-      <description><![CDATA[Output leakage map.]]></description>
-    </image>
+   
+
+    <!-- 
     <image hidden="true">
       <name>OutputK1FileName</name>
       <longflag>outputK1</longflag>
@@ -139,24 +132,24 @@
     <image hidden="true">
       <name>OutputMaxSlopeFileName</name>
       <longflag>outputMaxSlope</longflag>
-      <label>Output maximum slope image</label>
+      <label>Output time to peak image</label>
       <channel>output</channel>      
-      <description><![CDATA[Output maximum slope in the time series curve of each voxel.]]></description>
+      <description><![CDATA[ACTUALLY TIME TO PEAK!.]]></description>
     </image>
-      -->
+    --> 
     <image>
       <name>OutputAUCFileName</name>
       <longflag>outputAUC</longflag>
-      <label>Output RCBV image</label>
+      <label>Output CBV image</label>
       <channel>output</channel>      
-      <description><![CDATA[Output Relative Cerebral Blood Volume (rCBV) map.]]></description>
+      <description><![CDATA[Output Cerebral Blood Volume (CBV) map.]]></description>
     </image>
     <image>
       <name>OutputCBFFileName</name>
       <longflag>outputCBF</longflag>
-      <label>Output RCBF image</label>
+      <label>Output CBF image</label>
       <channel>output</channel>      
-      <description><![CDATA[Output Relative Cerebral Blood Flow (rCBF) map.]]></description>
+      <description><![CDATA[Output Cerebral Blood Flow (CBF) map.]]></description>
     </image>
     <image>
       <name>OutputMTTFileName</name>
@@ -165,7 +158,17 @@
       <channel>output</channel>      
       <description><![CDATA[Output Mean Transit Time (MTT) map.]]></description>
     </image>
+
+     <image>
+      <name>OutputK2FileName</name>
+      <longflag>outputK2</longflag>
+      <label>Output TTP image</label>
+      <channel>output</channel>      
+      <description><![CDATA[Output 'Time to Peak' map (time from the start of the injection until maximum contrast is reached).]]></description>
+    </image>
+
   </parameters>
+  <!-- 
   <parameters advanced="true">
     <label>Advanced options</label>
     <description><![CDATA[Debugging and advanced research options.]]></description> 
@@ -207,7 +210,6 @@
       <longflag>concentrations</longflag>
       <description><![CDATA[Output Concentrations 4D Image (txyz)]]></description>
     </image>	
-    <!--
     <image type="dynamic-contrast-enhanced">
       <name>OutputFittedDataImageFileName</name>
       <label>Output Fitted Data 4D Image</label>
@@ -215,6 +217,6 @@
       <longflag>fitted</longflag>
       <description><![CDATA[Output Fitted Data 4D Image (txyz)]]></description>
     </image>	 
-     --> 
   </parameters>
+  --> 
 </executable>

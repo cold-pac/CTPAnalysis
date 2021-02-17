@@ -68,7 +68,6 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>::Con
 
 bool check_tissue(const float* concentration, int timeSize) {
 
-
   int x = 0; 
 
   for (x = 0; x < timeSize; x++) {
@@ -90,112 +89,45 @@ bool check_tissue(const float* concentration, int timeSize) {
 //apply 3 x 3 Guassian filter (voxel, 3 x 3 box around that, look at the distribution/mean, make them all the same )
 
 
-float area_under_curve_2(int signalSize, 
-                       const float* timeAxis,
-                       const float* concentration, 
-                       int BATIndex, 
-                       float aucTimeInterval)
-{ 	
-  float auc = 0.0f;
-  if(BATIndex>=signalSize) return auc;
-  //std::cerr << std::endl << "BATIndex:"<<BATIndex << std::endl;	
-	
-  int lastIndex = BATIndex;
-  //std::cerr << std::endl << "timeAxis[0]:"<< timeAxis[0] << std::endl;	
-  float targetTime = timeAxis[BATIndex]+aucTimeInterval; 
-  //std::cerr << std::endl << "targetTime:"<< targetTime << std::endl;	
-  float tempTime = timeAxis[BATIndex+1];
-  //std::cerr << std::endl << "tempTime:"<< tempTime << std::endl;	
+//"Integral of gamma variate fit"
+//fitting of a gamma-variate function required to correct for 
+//tracer recirculation 
+//remove any elevated post-bolus baseline 
 
-  //find the last index
-  while((tempTime<targetTime)&&(lastIndex<(signalSize-2)))
-    {	
-    lastIndex+=1;		
-    tempTime = timeAxis[lastIndex+1] ;
-    //std::cerr << std::endl << "tempTime"<<tempTime << std::endl;
-    }	
-		
-  //if ((lastIndex-BATIndex)==0) return auc = aucTimeInterval*concentration[BATIndex];
+//let's try again but just 
+//correct for baseline, not fit it to a gamma-variate function
+float integrate(float* yValues, float* xValues, int size) {
+// do we have to integrate with constant time points? 
+// is that why this isn't working? 
+// find out! 
 
-  //for (int i=0; i<signalSize; i++)
-    //{ printf("conc(%d) = %f\n", i, (float) concentration[i]) ;}
-
-  //extract time and concentration
-  float * concentrationValues = new float[lastIndex-BATIndex+2]();
-  float * timeValues = new float[lastIndex-BATIndex+2]();
-
-  //find the extra time and concentration value for auc
-  float y1, y2, x1, x2, slope, b, targetX, targetY;
-  y2 = concentration[lastIndex+1];
-  y1 = concentration[lastIndex];
-  x2 = timeAxis[lastIndex+1];
-  x1 = timeAxis[lastIndex];
-  slope = (y2-y1)/(x2-x1);
-  b = y1-slope*x1;
-  targetX = timeAxis[BATIndex] + aucTimeInterval;
-  targetY = slope*targetX+b;
-  if(targetX>timeAxis[signalSize-1])
-    {
-    targetX = timeAxis[lastIndex+1];
-    targetY = concentration[lastIndex+1];
-    }
-  concentrationValues[lastIndex-BATIndex+1] = targetY; //put the extra value at the end
-  timeValues[lastIndex-BATIndex+1] = targetX; //put the extra time value at the end
-	
-	//printf("lastIndex is %f\n", (float)lastIndex);
-  for(int i=0; i<(lastIndex-BATIndex+1); ++i)
-    {
-    concentrationValues[i] = concentration[i+BATIndex];
-    timeValues[i] = timeAxis[i+BATIndex];
-    //printf("lastIndex is %f,%f\n", (float) concentrationValues[i],(float)timeValues[i]);
-    //printf("lastIndex is %f,%f, %f\n", (float) concentrationValues[i],(float)timeValues[i], (float) concentration[i+BATIndex]);
-    }	
-
-  //get auc
-  auc = intergrate(concentrationValues,timeValues,(lastIndex-BATIndex+2));
-  
-  delete [] concentrationValues;
-  delete [] timeValues;
-  return auc;
-}
+//"baseline corrected"
+//"gamma variate function fit "
+//"correct curve by gamma variate fit"
 
 
-
-float integrate(float* yValues, float * xValues, int size)
-{
   float area= 0.0f;
+
+  //std::cout << "timing!" << xValues[0] << " " << xValues[1]; 
 
   int x; 
   
   for (x = 0; x < (size - 1); x++) {
    
-    area += ((xValues[x + 1] - xValues[x]) * (yValues[x] + yValues[x + 1]) )/ 2;
+    area += ((xValues[x + 1] - xValues[x]) * (yValues[x] + yValues[x + 1]))/2;
 
   }
-  
-  return area;
+
+  if (!check_tissue(yValues, size)) {
+    return 0.0; 
+  } else {
+    return area; 
+  }
 
 }
 
 
-float clean_up(int signalSize, const float* timeAxis, const float* concentration, int BATIndex, float aucTimeInterval) {
-
-
-  int x = 0; 
-
-  for (x = 0; x < signalSize; x++) {
-    if (concentration[x] < 0 || concentration[x] > 70) {
-      return 0.0; 
-    }
-  }
-
-
-  return area_under_curve_2(signalSize, timeAxis, concentration, BATIndex,  aucTimeInterval);  
-
-
-}
-
-float calculate_CBV(float* yValues, std::vector<float>& xValues)
+float time_to_peak(float* yValues, std::vector<float>& xValues)
 {
 
   float baseline; 
@@ -208,16 +140,16 @@ float calculate_CBV(float* yValues, std::vector<float>& xValues)
   int x; 
 
   peak = 0.0; 
+
+  if (!check_tissue(yValues, xValues.size())) {
+    return 0.0; 
+  }
   
   for (x = 0; x < (xValues.size() - 1); x++) {
     
     if (yValues[x] > peak) {
         peak = yValues[x]; 
         time_of_peak = xValues[x]; 
-    }
-
-    if (yValues[x] < 0 || yValues[x] > 70) {
-      return 0.0; 
     }
     
   }
@@ -226,34 +158,6 @@ float calculate_CBV(float* yValues, std::vector<float>& xValues)
 
 }
 
-
-
-
-float time_to_peak(float* yValues, std::vector<float>& xValues)
-{
-
-  float peak, time_of_peak;
-
-  int x; 
-
-  peak = 0.0; 
-  
-  for (x = 0; x < (xValues.size() - 1); x++) {
-    
-    if (yValues[x] > peak) {
-        peak = yValues[x]; 
-        time_of_peak = xValues[x]; 
-    }
-
-    if (yValues[x] < 0 || yValues[x] > 70) {
-      return 0.0; 
-    }
-    
-  }
-  
-  return time_of_peak;
-
-}
 
 
 
@@ -518,6 +422,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   VectorVoxelType vectorVoxel, fittedVectorVoxel;
 
   float tempK2 = 0.0f;
+  float tempTTP = 0.0f; 
   float tempK1 = 0.0f;
   float tempMaxSlope = 0.0f;
   float tempAUC = 0.0f;
@@ -529,7 +434,8 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   const VectorVolumeType* inputVectorVolume = this->GetInput();
 
   VectorVolumeConstIterType inputVectorVolumeIter(inputVectorVolume, outputRegionForThread);
-  OutputVolumeIterType k2VolumeIter(this->GetK2Output(), outputRegionForThread);
+  //OutputVolumeIterType k2VolumeIter(this->GetK2Output(), outputRegionForThread);
+  OutputVolumeIterType ttpVolumeIter(this->GetK2Output(), outputRegionForThread);
   OutputVolumeIterType k1VolumeIter(this->GetK1Output(), outputRegionForThread);
   typename VectorVolumeType::Pointer fitted = this->GetFittedDataOutput();
   VectorVolumeIterType fittedVolumeIter(fitted, outputRegionForThread);
@@ -548,15 +454,19 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   OutputVolumeIterType batVolumeIter(this->GetBATOutput(), outputRegionForThread);
 
   //set up optimizer and cost function
-  
-
   //relaxivity change for each voxel is approximated as a linear combination ... (equation 1)
   //determine K1 and K2 by fitting ordinary least squares to equation 1 
-
-  /* 
+  
+  /*
   itk::LevenbergMarquardtOptimizer::Pointer optimizer = itk::LevenbergMarquardtOptimizer::New();
-  LMCostFunction::Pointer                   costFunction = LMCostFunction::New();
+  LMCostFunction::Pointer                   costFunction = LMCostFunction::New(); //might need to be changed 
+
+
+  optimizer->SetNumberOfIterations(100);
+  optimizer->UseCostFunctionGradientOff();
+  optimizer->SetCostFunction(cost.GetPointer());
   */ 
+  
   int timeSize = (int)inputVectorVolume->GetNumberOfComponentsPerPixel();
   // each pixel has 14 'components' i.e. acquisition times. 
 
@@ -570,7 +480,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 
  //TODO: 
  //1. check that the m_AIF is actually correct (correct values, is an actual array etc)
- //2. 
+ //2. "standard SVD" --> improve by changing to bSVD or oSVD
 
   vnl_matrix<float> camat(timeSize, timeSize); 
 
@@ -589,6 +499,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
         //"R arrays start at 1"
         //do vnl_matrix's have 0-indexed co-ordinates
         //better check this!
+        //yes vnl_matrices are 0-indexed 
         
       } else if (i > j) {
 
@@ -708,73 +619,25 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   aucVolumeIter.GoToBegin();
   mttVolumeIter.GoToBegin();
   cbfVolumeIter.GoToBegin(); 
+  ttpVolumeIter.GoToBegin(); 
 
 
   while (!aucVolumeIter.IsAtEnd()) {
 
       vectorVoxel = inputVectorVolumeIter.Get();
-
-      success = true;
+      fittedVectorVoxel = inputVectorVolumeIter.Get();
       
-      tempK2 = tempK1 = tempMaxSlope = tempAUC = tempMTT = tempCBF = 0.0;
-      BATIndex = FirstPeakIndex = 0;
+      tempAUC = tempMTT = tempCBF = tempTTP = 0.0;
 
-
-      // Compute the bolus arrival time and the max slope parameter
       
-      if (success)
-        {
-          int status;
-          // Compute the bolus arrival time
-          if (m_BATCalculationMode == "UseConstantBAT")
-          {
-            BATIndex = m_constantBAT;
-             status = 1;
-          }
-          else if (m_BATCalculationMode == "PeakGradient")
-          {
-             status = compute_bolus_arrival_time(timeSize, &vectorVoxel[0], BATIndex, FirstPeakIndex, tempMaxSlope);
-          }
-
-        if (!status)
-          {
-          success = false;
-          }
-        }
-     
-     
-      // Shift the current time course to align with the BAT of the AIF
-      // (note the sense of the shift)
-      if (success)
-        {
-        batVolumeIter.Set(BATIndex);
-        shift = m_AIFBATIndex - BATIndex;
-        shiftedVectorVoxel.Fill(0.0);
-        if (shift <= 0)
-          {
-          // AIF BAT before current BAT, should always be the case
-          shiftStart = 0;
-          shiftEnd = vectorVoxel.Size() + shift;
-          }
-        else
-          {
-          success = false;
-          }
-        }
-      if (success)
-        {
-        for (unsigned int i = shiftStart; i < shiftEnd; ++i)
-          {
-          shiftedVectorVoxel[i] = vectorVoxel[i - shift];
-          }
-        }
-      
+      /* 
       //need to figure out what's wrong with this! 
-      //tempAUC = (integrate(const_cast<float *>(vectorVoxel.GetDataPointer()), &m_Timing[0], inputVectorVolume->GetNumberOfComponentsPerPixel()) )/(integrate(&m_AIF[0], &m_Timing[0], inputVectorVolume->GetNumberOfComponentsPerPixel())); 
-      tempAUC = clean_up(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval)/m_aifAUC; 
+      tempAUC = (integrate(const_cast<float *>(vectorVoxel.GetDataPointer()), &m_Timing[0], inputVectorVolume->GetNumberOfComponentsPerPixel()) )/(integrate(&m_AIF[0], &m_Timing[0], inputVectorVolume->GetNumberOfComponentsPerPixel())); 
+      //tempAUC = clean_up(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval)/m_aifAUC; 
 
       aucVolumeIter.Set(static_cast<OutputVolumePixelType>(tempAUC) ); 
       ++aucVolumeIter;
+      */ 
 
       
       for (index = 0; index < timeSize; index++) {
@@ -795,8 +658,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 
       }
 
-     
-      
+        
 
       cbfVolumeIter.Set(static_cast<OutputVolumePixelType>(tempCBF) );
       ++cbfVolumeIter;
@@ -804,14 +666,52 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 
       //tempMTT = (mean_transit_time(timeSize, &m_Timing[0], const_cast<float *>(vectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval) );
       //tempMTT = (time_to_peak(const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), m_Timing) );
+    
+      //tempMTT = tempAUC/tempCBF; 
 
-      tempMTT = tempAUC/tempCBF; 
+      
+      //will this work? 
+
+      float area = 0.0;
+
+      //std::cout << "timing!" << xValues[0] << " " << xValues[1]; 
+
+      int x; 
+      
+      for (x = 0; x < (timeSize - 1); x++) {
+      
+        area += ((m_Timing[x + 1] - m_Timing[x]) * (rt_hat.get(x, 0) + rt_hat.get(x+1, 0)))/2;
+
+      }
+
+      if (check_tissue(const_cast<float *>(vectorVoxel.GetDataPointer()), timeSize)) {
+
+          tempMTT = area/rt_hat.max_value(); 
+          //needs to be multiplied by 'constant' interval between scans, ▵T
+          tempAUC = tempCBF/tempMTT; 
+
+      } else {
+
+          tempMTT = 0; 
+          tempAUC = 0; 
+
+      }
+
+      
+      
       mttVolumeIter.Set(static_cast<OutputVolumePixelType>(tempMTT) );
       ++mttVolumeIter;
 
+      aucVolumeIter.Set(static_cast<OutputVolumePixelType>(tempAUC) ); 
+      ++aucVolumeIter;
       
-       
-      ++batVolumeIter;
+      //actually time to peak, just didn't want to create a new variable! 
+     
+      tempTTP = time_to_peak(const_cast<float *>(vectorVoxel.GetDataPointer() ), m_Timing); 
+      ttpVolumeIter.Set(static_cast<OutputVolumePixelType>(tempTTP) );
+      ++ttpVolumeIter; 
+
+
       ++inputVectorVolumeIter;
 
       progress.CompletedPixel(); 
@@ -820,6 +720,9 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 
 
 }
+
+
+
 
 // Calculate a population AIF.
 //

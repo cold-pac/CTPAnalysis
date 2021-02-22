@@ -13,6 +13,7 @@
 // #include "itkSignalIntensityToConcentrationImageFilter.h"
 #include "itkConcentrationToQuantitativeImageFilter.h"
 
+
 #include <sstream>
 #include <fstream>
 
@@ -463,6 +464,7 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
 
   //set output
 
+  //Time to Peak 
   if (!OutputK2FileName.empty())
     {
     typename OutputVolumeWriterType::Pointer k2writer = OutputVolumeWriterType::New();
@@ -470,6 +472,18 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     k2writer->SetFileName(OutputK2FileName.c_str() );
     k2writer->SetUseCompression(1);
     k2writer->Update();
+
+
+    //ttp = slicer.mrmlScene.GetNodeByID('vtkMRMLScalarVolumeNode4') = vtkMRMLScalarVolumeNode
+    //ttp.GetDisplayNode() = vtkMRMLScalarVolumeDisplayNode
+
+    /*
+    vtkMRMLMultiVolumeDisplayNode* mvD = mVolumeNode->GetMultiVolumeDisplayNode();
+    mvD->AutoWindowLevelOff();
+    mvD->SetAndObserveColorNodeID(“vtkMRMLColorTableNodeFileColdToHotRainbow.txt”);
+    mvD->SetWindowLevelMinMax(35,50);
+    */ 
+
     }
 
   /* 

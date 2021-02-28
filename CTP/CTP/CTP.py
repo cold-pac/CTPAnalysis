@@ -14,7 +14,7 @@ class CTP:
     parent.title = "CT Perfusion" 
     parent.categories = ["Quantification"]
     parent.dependencies = []
-    parent.contributors = ["Erol Cimen (POW)"] # replace with "Firstname Lastname (Org)"
+    parent.contributors = ["Erol Cimen (POW)", "Ken Butcher (POW)"] # replace with "Firstname Lastname (Org)"
     parent.helpText = """
     This will perform mathematical processing on CT perfusion data.
     """
@@ -341,9 +341,21 @@ class CTPLogic:
 
     return map
 
+
+
   def generateMaps(self, inputVolume, inputAIF):
 
-    print(inputVolume.GetID(), inputAIF.GetID())
+    try:
+      print(inputVolume.GetID(), inputAIF.GetID())
+    except:
+      print("You haven't selected volumes!")
+      print(inputAIF)
+
+      #convert to segment then to labelmapvolume again? 
+
+      inputAIF_array = slicer.util.arrayFromVolume(inputAIF)
+      print(inputAIF_array.values())
+      return
 
     """
     /home/billg/Work/Slicer-SuperBuild-Debug/CTP_Analysis-build/lib/Slicer-4.13/cli-modules/DSCMRIAnalysis --relaxivity 0.0039 --S0grad 15.0 --fTolerance 1e-4 --gTolerance 1e-4 --xTolerance 1e-5 --epsilon 1e-9 --maxIter 200 --aucTimeInterval 90 --aifMask /tmp/Slicer-billg/BGJBB_vtkMRMLLabelMapVolumeNodeC.nrrd --outputAUC /tmp/Slicer-billg/BGJBB_vtkMRMLScalarVolumeNodeB.nrrd --outputCBF /tmp/Slicer-billg/BGJBB_vtkMRMLScalarVolumeNodeC.nrrd --outputMTT /tmp/Slicer-billg/BGJBB_vtkMRMLScalarVolumeNodeD.nrrd --outputK2 /tmp/Slicer-billg/BGJBB_vtkMRMLScalarVolumeNodeE.nrrd /tmp/Slicer-billg/BGJBB_vtkMRMLMultiVolumeNodeB.nrrd
@@ -359,7 +371,7 @@ class CTPLogic:
         print('  {0} [{1}]: {2}'.format(n.GetParameterName(groupIndex, parameterIndex),
           n.GetParameterTag(groupIndex, parameterIndex),n.GetParameterLabel(groupIndex, parameterIndex)))
 
-    
+
     # Set parameters
     parameters = {}
     parameters["InputFourDImageFileName"] = inputVolume
@@ -398,9 +410,13 @@ class CTPLogic:
 
     for map in outputMaps:
       self.setLevels(map)
-    
+  
+
+
+    #plot the AIF as well!
 
     return outputTTP
+
 
 
   def getInfo(self):
@@ -452,6 +468,8 @@ class CTPLogic:
 
 
     return 
+
+
 
   def moving_plottingDensity(self, point_Ijk):
     
@@ -569,6 +587,8 @@ class CTPLogic:
 
     return 
 
+
+
   def plottingDensity(self, Xcoord = 250, Ycoord = 250):
     
     #you can grab the cursor position and constantly update this table
@@ -682,6 +702,9 @@ class CTPLogic:
 
     return 
 
+
+
+  
   def calculateRelativeValues(self):
 
     #Take the time density curves FOR EACH VOXEL 

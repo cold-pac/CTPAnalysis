@@ -15,11 +15,253 @@
 #include "itkVectorImage.h"
 #include "itkImageRegionIterator.h"
 #include "itkCastImageFilter.h"
-#include "../PkSolver/PkSolver.h"
+#include "PkSolver.h"
 #include <string>
 
 namespace itk
 {
+
+
+/* to make a correction to this estimate for contrast agent leakage, 
+
+CONTRAST AGENT LEAKAGE!
+
+GAMMA VARIATE FUNCTION: (not the same as the gamma function)
+
+y(t) = C0(t - t0)^a x exp^-(t - t0)/b
+
+y(t)= A(t- t0)^alpha . exp(-(t - t0)/beta)
+
+C(t) = K(t - AT)^alpha . e^(-(t - AT)/beta)
+
+valid for t > t0
+
+t0 IS THE DELAY TIME FROM T = 0 TO THE TIME THE FUNCTION BEGINS, A = constant scale factor, alpha and beta are free parameters 
+t0 is also called AT i.e. arrival time
+
+i.e. t0 is the bolus arrival time 
+
+can be simplified to (assuming t0 = 0): 
+
+y(t) = A.t^alpha.exp(-t/beta) -> so I guess three parameters, A, alpha, and beta 
+LET'S START BY DOING THIS --> MEANS WE DON'T HAVE TO FIND THE BOLUS ARRIVAL TIME AND 
+"SHIFT OUR VOXEL VECTOR"
+
+CAN output the fitted function as well so we can see if it works!
+
+
+AND --> tmax (the time when y(t) is maximum, is just)
+
+y'(tmax) = 0
+tmax = alpha.beta 
+
+
+model fitting, which has the additional advantage
+of obtained interpolated values between time points, which is a prerequisite for the
+current perfusion analysis methods when dealing with non-equidistantly time sampling
+intervals.
+
+The current standard is the gamma-variate model (Thompson et al., 1964). This
+model was proposed because it visually resembles a measured tissue attenuation curve
+
+
+
+
+
+*/ 
+
+class LMCostFunction2: public itk::MultipleValuedCostFunction
+{
+public:
+  typedef LMCostFunction2                    Self;
+  typedef itk::MultipleValuedCostFunction   Superclass;
+  typedef itk::SmartPointer<Self>           Pointer;
+  typedef itk::SmartPointer<const Self>     ConstPointer;
+  itkNewMacro( Self );
+        
+  enum { SpaceDimension =  2 };
+  unsigned int RangeDimension; 
+
+  enum ModelType { TOFTS_2_PARAMETER = 1 };
+        
+  typedef Superclass::ParametersType              ParametersType;
+  typedef Superclass::DerivativeType              DerivativeType;
+  typedef Superclass::MeasureType                 MeasureType, ArrayType;
+  typedef Superclass::ParametersValueType         ValueType;
+		      
+        
+  int m_ModelType;
+
+  LMCostFunction2()
+  {
+  }
+        
+  void SetModelType (int model) {
+    m_ModelType = model;
+  }
+        
+  void SetNumberOfValues(unsigned int NumberOfValues)
+  {
+    RangeDimension = NumberOfValues;
+  }
+
+  //blood concentration curve...     
+  //THIS IS THE ARTERIAL INPUT FUNCTION!!!! 
+  void SetCb (const float* cb, int sz) //BloodConcentrationCurve.
+  {
+    Cb.set_size(sz);
+    for( int i = 0; i < sz; ++i )
+      Cb[i] = cb[i];
+    //std::cout << "Cb: " << Cb << std::endl;
+  }
+        
+  //what is cv? THE SHIFTED VECTOR VOXEL 
+  //I.E. IF WE DON'T SHIFT, THE VECTOR VOXEL     
+  void SetCv (const float* cv, int sz) //Self signal Y
+  {    
+    Cv.set_size (sz);
+    for (int i = 0; i < sz; ++i)
+      Cv[i] = cv[i];
+    //std::cout << "Cv: " << Cv << std::endl;
+  }
+        
+  //time !
+  //THEY PASS TIME IN MINUTES SO... 
+  //MAYBE DO THIS ALSO 
+  void SetTime (const float* cx, int sz) //Self signal X
+  {
+    Time.set_size (sz);
+    for( int i = 0; i < sz; ++i )
+      Time[i] = cx[i];
+    //std::cout << "Time: " << Time << std::endl;
+  }
+
+  //integral of the AIF from time j - 1 to time j 
+  void SetIntCb (const float* cb, const float* cx, int sz) //leakage curve.
+  {
+    IntCb.set_size (sz);
+    for( int i = 0; i < sz; ++i ) {
+        IntCb[i] = 0;
+        for (int j = 1; j < i; j++ ) 
+            IntCb[i]+= (cx[j]-cx[j-1])*(cb[j]+cb[j-1])/2; //integrating using the trapezoidal rule 
+        }
+    //std::cout << "IntCb: " << IntCb << std::endl;
+  }
+        
+  //for each pixel, we determined K1 and K2 by using a linear least squares fit to 
+  //Equation (1)
+
+  /*
+
+    R2(t) = K1.R2(t)bar - K2.int(0 to t) of R2(t)bar 
+
+    whole brain average of nonenhancing voxels and its time integral 
+
+  */
+  MeasureType GetValue( const ParametersType & parameters) const
+  {
+    MeasureType measure(RangeDimension);
+
+    ValueType K2 = parameters[0];
+    ValueType K1 = parameters[1];
+            
+    ArrayType K1Term;
+    K1Term = -K2/K1*Time;
+    ValueType deltaT = Time(1) - Time(0);
+    
+    if(m_ModelType == TOFTS_2_PARAMETER)
+      {
+      measure = Cv -(K1*Cb-K2*IntCb);
+      //i.e. 
+      //AND HERE'S THE KICKER 
+      /* 
+        they've substituted "whole brain average of nonenhancing tissues" with the AIF 
+        and then the 'cost' is the vector Voxel (the TDCs) MINUS the function you're trying to fit 
+        i.e. the difference between the real values and the fitted function 
+        and the optimizer iteratively tries to minimise this cost 
+      */ 
+
+      }
+            
+    return measure; 
+  }
+  
+  MeasureType GetFittedFunction( const ParametersType & parameters) const
+  {
+    MeasureType measure(RangeDimension);
+
+    ValueType K2 = parameters[0];
+    ValueType K1 = parameters[1];
+            
+    ArrayType K1Term;
+    K1Term = -K2/K1*Time;
+    ValueType deltaT = Time(1) - Time(0);
+    
+    if(m_ModelType == TOFTS_2_PARAMETER)
+      {
+      measure = K1*Cb-K2*IntCb;
+      }
+            
+    return measure; 
+  }
+    
+  //Not going to be used
+  void GetDerivative( const ParametersType & /* parameters*/,
+                      DerivativeType  & /*derivative*/ ) const
+  {   
+  }
+        
+  unsigned int GetNumberOfParameters(void) const
+  {
+    if(m_ModelType == TOFTS_2_PARAMETER)
+      {
+      return 2;
+      }
+  }
+        
+  unsigned int GetNumberOfValues(void) const
+  {
+    return RangeDimension;
+  }
+        
+protected:
+  virtual ~LMCostFunction2(){}
+private:
+        
+  ArrayType Cv, Cb, Time, IntCb;
+        
+  ArrayType Convolution(ArrayType X, ArrayType Y) const
+  {
+    ArrayType Z;
+    Z = vnl_convolve(X,Y).extract(X.size(),0);
+    return Z;
+  };
+        
+  ArrayType Exponential(ArrayType X) const
+  {
+    ArrayType Z;
+    Z.set_size(X.size());
+    for (unsigned int i=0; i<X.size(); i++)
+      {
+      Z[i] = exp(X(i));
+      }
+    return Z;
+  };
+        
+  int constraintFunc(ValueType x) const
+  {
+    if (x<0||x>1)
+      return 1;
+    else
+      return 0;
+            
+  };
+        
+        
+};
+
+
+
 /** \class ConcentrationToQuantitativeImageFilter
  * \brief Calculates quantitative imaging parameters from concentration curves.
  *

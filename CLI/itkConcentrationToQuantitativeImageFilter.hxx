@@ -160,6 +160,120 @@ float time_to_peak(float* yValues, std::vector<float>& xValues)
 
 
 
+bool my_solver(int signalSize, const float* timeAxis, 
+               const float* PixelConcentrationCurve, 
+               const float* BloodConcentrationCurve, 
+               float& K2, float& K1, 
+               float fTol, float gTol, float xTol,
+               float epsilon, int maxIter,
+               itk::LevenbergMarquardtOptimizer* optimizer,
+               LMCostFunction* costFunction,
+               int modelType,
+               int constantBAT,
+               const std::string BATCalculationMode
+               )
+{
+  //std::cout << "in pk solver" << std::endl;
+  // probe.Start("pk_solver");
+  // Note the unit: timeAxis should be in minutes!! This could be related to the following parameters!!
+  // fTol      =  1e-4;  // Function value tolerance
+  // gTol      =  1e-4;  // Gradient magnitude tolerance 
+  // xTol      =  1e-5;  // Search space tolerance
+  // epsilon   =  1e-9;    // Step
+  // maxIter   =   200;  // Maximum number of iterations
+  //std::cerr << "In pkSolver!" << std::endl;
+
+  /* 
+  m_BATCalculationMode = BATCalculationMode;
+  m_ConstantBAT = constantBAT;
+  */
+
+  // Levenberg Marquardt optimizer  
+        
+  //////////////
+  LMCostFunction::ParametersType initialValue;
+  if(modelType == itk::LMCostFunction::TOFTS_2_PARAMETER)
+    {
+    initialValue = LMCostFunction::ParametersType(2); ///...
+    }
+  else
+    {
+    initialValue = LMCostFunction::ParametersType(3);
+    initialValue[2] = 0.1;     //f_pv //...
+    }
+  initialValue[0] = 0.1;     //K2 //...
+  initialValue[1] = 0.5;     //K1 //...
+        
+  costFunction->SetNumberOfValues (signalSize);
+  
+
+  costFunction->SetCb (BloodConcentrationCurve, signalSize); //BloodConcentrationCurve
+  costFunction->SetCv (PixelConcentrationCurve, signalSize); //Signal Y
+  costFunction->SetTime (timeAxis, signalSize); //Signal X
+  costFunction->SetIntCb (BloodConcentrationCurve, timeAxis, signalSize); // integral concentration == leakage
+  costFunction->GetValue (initialValue); //...
+  costFunction->SetModelType(modelType);
+
+  optimizer->UseCostFunctionGradientOff();   
+
+  try {
+     optimizer->SetCostFunction( costFunction ); 
+  }
+  catch ( itk::ExceptionObject & e ) {
+  std::cout << "Exception thrown ! " << std::endl;
+  std::cout << "An error ocurred during Optimization" << std::endl;
+  std::cout << e << std::endl;
+  return false;
+  }   
+        
+  itk::LevenbergMarquardtOptimizer::InternalOptimizerType * vnlOptimizer = optimizer->GetOptimizer();//...
+
+  vnlOptimizer->set_f_tolerance( fTol ); //...
+  vnlOptimizer->set_g_tolerance( gTol ); //...
+  vnlOptimizer->set_x_tolerance( xTol ); //...
+  vnlOptimizer->set_epsilon_function( epsilon ); //...
+  vnlOptimizer->set_max_function_evals( maxIter ); //...
+        
+  // We start not so far from the solution 
+        
+  optimizer->SetInitialPosition( initialValue ); //...       
+  
+  try {
+  //  probe.Start("optimizer");
+  optimizer->StartOptimization();
+  //   probe.Stop("optimizer");
+  }
+  catch( itk::ExceptionObject & e ) {
+  std::cerr << "Exception thrown ! " << std::endl;
+  std::cerr << "An error ocurred during Optimization" << std::endl;
+  std::cerr << "Location    = " << e.GetLocation()    << std::endl;
+  std::cerr << "Description = " << e.GetDescription() << std::endl;
+  return false;
+  }
+  //vnlOptimizer->diagnose_outcome();
+  //std::cerr << "after optimizer!" << std::endl;
+  itk::LevenbergMarquardtOptimizer::ParametersType finalPosition;
+  finalPosition = optimizer->GetCurrentPosition();
+  //std::cerr << finalPosition[0] << ", " << finalPosition[1] << ", " << finalPosition[2] << std::endl;
+
+        
+  //Solution: remove the scale of 100  
+  K2 = finalPosition[0];
+  K1 = finalPosition[1];
+
+  // "Project" back onto the feasible set.  Should really be done as a
+  // constraint in the optimization.
+  if(K1<0) K1 = 0;
+  //if(K1>1) K1 = 1;
+  if(K2<0) K2 = 0;
+  //if(K2>5) K2 = 5;
+		
+  //if((Fpv>1)||(Fpv<0)) Fpv = 0;
+  //  probe.Stop("pk_solver");
+  return true;
+}
+
+
 
 
 template< class TInputImage, class TMaskImage, class TOutputImage >

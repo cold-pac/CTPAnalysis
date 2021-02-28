@@ -99,6 +99,8 @@ std::vector<float> GetTiming(itk::MetaDataDictionary& dictionary)
 }
 
 
+  
+
 
 //TODO: come back to this!
 // Read an AIF from a CSV style file.  Columns are timing and concentration.
@@ -572,11 +574,15 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     }
 
   */ 
+  
 
   return EXIT_SUCCESS;
 }  
 
 }
+
+
+
 
 int main( int argc, char * argv[] )
 {

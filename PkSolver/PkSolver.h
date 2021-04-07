@@ -301,6 +301,8 @@ float compute_s0_using_sumsignal_properties (int signalSize, const float* Signal
 
 float compute_s0_individual_curve (int signalSize, const float* SignalY, float S0GradThresh, std::string BATCalculationMode, int constantBAT);
 
+void test_func(); 
+
 };
 
 #endif

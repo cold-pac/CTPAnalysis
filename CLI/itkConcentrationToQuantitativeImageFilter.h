@@ -15,11 +15,13 @@
 #include "itkVectorImage.h"
 #include "itkImageRegionIterator.h"
 #include "itkCastImageFilter.h"
-#include "PkSolver.h"
+#include "../PkSolver/PkSolver.h"
 #include <string>
+#include <math.h>
 
 namespace itk
 {
+
 
 
 /* to make a correction to this estimate for contrast agent leakage, 
@@ -70,6 +72,9 @@ model was proposed because it visually resembles a measured tissue attenuation c
 
 */ 
 
+
+
+
 class LMCostFunction2: public itk::MultipleValuedCostFunction
 {
 public:
@@ -107,6 +112,7 @@ public:
 
   //blood concentration curve...     
   //THIS IS THE ARTERIAL INPUT FUNCTION!!!! 
+  //I guess we don't need this... 
   void SetCb (const float* cb, int sz) //BloodConcentrationCurve.
   {
     Cb.set_size(sz);
@@ -135,6 +141,8 @@ public:
       Time[i] = cx[i];
     //std::cout << "Time: " << Time << std::endl;
   }
+  
+
 
   //integral of the AIF from time j - 1 to time j 
   void SetIntCb (const float* cb, const float* cx, int sz) //leakage curve.
@@ -162,16 +170,19 @@ public:
   {
     MeasureType measure(RangeDimension);
 
-    ValueType K2 = parameters[0];
-    ValueType K1 = parameters[1];
+    ValueType alpha = parameters[0];
+    ValueType beta = parameters[1];
             
-    ArrayType K1Term;
-    K1Term = -K2/K1*Time;
+    ArrayType betaTerm;
+    betaTerm = -alpha/beta*Time;
     ValueType deltaT = Time(1) - Time(0);
     
     if(m_ModelType == TOFTS_2_PARAMETER)
       {
-      measure = Cv -(K1*Cb-K2*IntCb);
+      //probs won't work!
+     // measure = Cv - (Power(Time, alpha) * PowerR(Time, beta));
+     measure = Cv - 5; 
+      //A * t^alpha * exp(-t/beta)
       //i.e. 
       //AND HERE'S THE KICKER 
       /* 
@@ -190,16 +201,18 @@ public:
   {
     MeasureType measure(RangeDimension);
 
-    ValueType K2 = parameters[0];
-    ValueType K1 = parameters[1];
+    ValueType alpha = parameters[0];
+    ValueType beta = parameters[1];
             
-    ArrayType K1Term;
-    K1Term = -K2/K1*Time;
+    ArrayType betaTerm;
+    betaTerm = -alpha/beta*Time;
     ValueType deltaT = Time(1) - Time(0);
     
     if(m_ModelType == TOFTS_2_PARAMETER)
       {
-      measure = K1*Cb-K2*IntCb;
+      //measure = (Power(Time, alpha) * PowerR(Time, beta));
+      measure = Time; 
+
       }
             
     return measure; 
@@ -228,7 +241,7 @@ protected:
   virtual ~LMCostFunction2(){}
 private:
         
-  ArrayType Cv, Cb, Time, IntCb;
+  ArrayType Cv, Cb, Time, IntCb, Extime;
         
   ArrayType Convolution(ArrayType X, ArrayType Y) const
   {
@@ -236,14 +249,55 @@ private:
     Z = vnl_convolve(X,Y).extract(X.size(),0);
     return Z;
   };
-        
-  ArrayType Exponential(ArrayType X) const
+
+  ArrayType Power(ArrayType X, ValueType y) const
   {
     ArrayType Z;
     Z.set_size(X.size());
     for (unsigned int i=0; i<X.size(); i++)
       {
-      Z[i] = exp(X(i));
+      Z[i] = pow(X[i], y);
+      }
+    return Z;
+  };
+
+  ArrayType PowerR(ArrayType X, ValueType y) const
+  {
+    double e_const = 2.71828; 
+
+    ArrayType Z;
+    ArrayType Holder; 
+    Z.set_size(X.size());
+    for (unsigned int i=0; i<X.size(); i++)
+      {
+      
+      Z[i] = pow(X[i], y);
+      }
+    return Z;
+  };
+
+  /*
+  vnl_vector<double> Exponential(vnl_vector<double> X, double y) const
+  {
+    vnl_vector<double> Z;
+    Z.set_size(X.size());
+    for (unsigned int i=0; i<X.size(); i++)
+      {
+      Z.put(i, exp(-X.get(i)));
+      }
+    return Z;
+  };
+  */
+  
+
+ ArrayType Exponential(ArrayType X, ValueType n) const
+  {
+    ArrayType Z;
+    Z.set_size(X.size());
+    
+    for (unsigned int i=0; i<X.size(); i++)
+      {
+      Z[i] = exp(-X[i]);
       }
     return Z;
   };
@@ -259,6 +313,8 @@ private:
         
         
 };
+
+
 
 
 

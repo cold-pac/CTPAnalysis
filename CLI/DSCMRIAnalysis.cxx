@@ -536,15 +536,6 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     cbfwriter->Update();
     }
 
-  /* 
-  if (!OutputRSquaredFileName.empty())
-    {
-    typename OutputVolumeWriterType::Pointer rsqwriter =OutputVolumeWriterType::New();
-    rsqwriter->SetInput(quantifier->GetRSquaredOutput() );
-    rsqwriter->SetFileName(OutputRSquaredFileName.c_str() );
-    rsqwriter->SetUseCompression(1);
-    rsqwriter->Update();
-    }
 
   if (!OutputFittedDataImageFileName.empty())
     {
@@ -561,6 +552,15 @@ int DoIt( int argc, char * argv[], const T1 &, const T2 &)
     multiVolumeWriter->Update();
     }
 
+  /* 
+  if (!OutputRSquaredFileName.empty())
+    {
+    typename OutputVolumeWriterType::Pointer rsqwriter =OutputVolumeWriterType::New();
+    rsqwriter->SetInput(quantifier->GetRSquaredOutput() );
+    rsqwriter->SetFileName(OutputRSquaredFileName.c_str() );
+    rsqwriter->SetUseCompression(1);
+    rsqwriter->Update();
+    }
   
 
   if (!OutputBolusArrivalTimeImageFileName.empty())

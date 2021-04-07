@@ -20,9 +20,13 @@
 
 #include <iostream>
 
+#include <math.h>
+
 
 namespace itk
 {
+
+
 
 template <class TInputImage, class TMaskImage, class TOutputImage>
 ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>::ConcentrationToQuantitativeImageFilter()
@@ -163,14 +167,12 @@ float time_to_peak(float* yValues, std::vector<float>& xValues)
 bool my_solver(int signalSize, const float* timeAxis, 
                const float* PixelConcentrationCurve, 
                const float* BloodConcentrationCurve, 
-               float& K2, float& K1, 
+               float& alpha, float& beta, 
                float fTol, float gTol, float xTol,
                float epsilon, int maxIter,
                itk::LevenbergMarquardtOptimizer* optimizer,
-               LMCostFunction* costFunction,
-               int modelType,
-               int constantBAT,
-               const std::string BATCalculationMode
+               LMCostFunction2* costFunction,
+               int modelType
                )
 {
   //std::cout << "in pk solver" << std::endl;
@@ -191,18 +193,20 @@ bool my_solver(int signalSize, const float* timeAxis,
   // Levenberg Marquardt optimizer  
         
   //////////////
-  LMCostFunction::ParametersType initialValue;
-  if(modelType == itk::LMCostFunction::TOFTS_2_PARAMETER)
+  LMCostFunction2::ParametersType initialValue;
+  if(modelType == itk::LMCostFunction2::TOFTS_2_PARAMETER)
     {
-    initialValue = LMCostFunction::ParametersType(2); ///...
+    initialValue = LMCostFunction2::ParametersType(2); ///...
     }
   else
     {
-    initialValue = LMCostFunction::ParametersType(3);
+    initialValue = LMCostFunction2::ParametersType(3);
     initialValue[2] = 0.1;     //f_pv //...
     }
-  initialValue[0] = 0.1;     //K2 //...
-  initialValue[1] = 0.5;     //K1 //...
+
+    
+  initialValue[0] = 0.1;     //alpha //...
+  initialValue[1] = 0.5;     //beta //...
         
   costFunction->SetNumberOfValues (signalSize);
   
@@ -258,14 +262,14 @@ bool my_solver(int signalSize, const float* timeAxis,
 
         
   //Solution: remove the scale of 100  
-  K2 = finalPosition[0];
-  K1 = finalPosition[1];
+  alpha = finalPosition[0];
+  beta = finalPosition[1];
 
   // "Project" back onto the feasible set.  Should really be done as a
   // constraint in the optimization.
-  if(K1<0) K1 = 0;
+  if(beta<0) beta = 0;
   //if(K1>1) K1 = 1;
-  if(K2<0) K2 = 0;
+  if(alpha<0) alpha = 0;
   //if(K2>5) K2 = 5;
 		
   //if((Fpv>1)||(Fpv<0)) Fpv = 0;
@@ -509,17 +513,11 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
     itkExceptionMacro("A mask image over which to establish the AIF or a prescribed AIF must be assigned. If prescribing an AIF, then UsePrescribedAIF must be set to true.");
     }
   // Compute the bolus arrival time
-  if (m_BATCalculationMode == "UseConstantBAT")
-  {
-    m_AIFBATIndex = m_constantBAT;
-  }
-  else if (m_BATCalculationMode == "PeakGradient")
-  {
     compute_bolus_arrival_time (m_AIF.size(), &m_AIF[0], m_AIFBATIndex, aif_FirstPeakIndex, aif_MaxSlope);
-  }
 
 
   // Compute the area under the curve for the AIF
+  // probs doesn't work 
   m_aifAUC = area_under_curve(timeSize, &m_Timing[0], &m_AIF[0], m_AIFBATIndex, m_AUCTimeInterval);
   //printf("m_aifAUC = %f\n", m_aifAUC);
   
@@ -533,11 +531,17 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 {
 
 
+  test_func(); 
+
+
+
   VectorVoxelType vectorVoxel, fittedVectorVoxel;
 
   float tempK2 = 0.0f;
   float tempTTP = 0.0f; 
   float tempK1 = 0.0f;
+  float tempBeta = 0.0f; 
+  float tempAlpha = 0.0f; 
   float tempMaxSlope = 0.0f;
   float tempAUC = 0.0f;
   float tempMTT = 0.0f;
@@ -551,6 +555,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   //OutputVolumeIterType k2VolumeIter(this->GetK2Output(), outputRegionForThread);
   OutputVolumeIterType ttpVolumeIter(this->GetK2Output(), outputRegionForThread);
   OutputVolumeIterType k1VolumeIter(this->GetK1Output(), outputRegionForThread);
+
   typename VectorVolumeType::Pointer fitted = this->GetFittedDataOutput();
   VectorVolumeIterType fittedVolumeIter(fitted, outputRegionForThread);
 
@@ -568,24 +573,11 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   OutputVolumeIterType batVolumeIter(this->GetBATOutput(), outputRegionForThread);
 
   //set up optimizer and cost function
-  //relaxivity change for each voxel is approximated as a linear combination ... (equation 1)
-  //determine K1 and K2 by fitting ordinary least squares to equation 1 
-  
-  /*
   itk::LevenbergMarquardtOptimizer::Pointer optimizer = itk::LevenbergMarquardtOptimizer::New();
-  LMCostFunction::Pointer                   costFunction = LMCostFunction::New(); //might need to be changed 
-
-
-  optimizer->SetNumberOfIterations(100);
-  optimizer->UseCostFunctionGradientOff();
-  optimizer->SetCostFunction(cost.GetPointer());
-  */ 
+  LMCostFunction::Pointer                   costFunction = LMCostFunction::New();
   
   int timeSize = (int)inputVectorVolume->GetNumberOfComponentsPerPixel();
   // each pixel has 14 'components' i.e. acquisition times. 
-
-  //std::cout << "this is the time size: " << timeSize << "\n"; 
-
 
   /* ok here we go: 
   Ca array!
@@ -704,18 +696,6 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 
   ProgressReporter progress(this, threadId, outputRegionForThread.GetNumberOfPixels());
 
-  // Cache the RMS error of fitting the model to the AIF
-  // pk_solver(timeSize, &timeMinute[0],
-  //           &m_AIF[0],
-  //           &m_AIF[0],
-  //           tempK2, tempVe, tempFpv,
-  //           m_fTol,m_gTol,m_xTol,
-  //           m_epsilon,m_maxIter, m_hematocrit,
-  //           optimizer,costFunction);
-
-  // double aifRMS = optimizer->GetOptimizer()->get_end_error();
-  // std::cout << "AIF RMS: " << aifRMS  << std::endl;
-
 
   VectorVoxelType shiftedVectorVoxel(timeSize); //as in also 14 components 
   int shift;
@@ -734,26 +714,72 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   mttVolumeIter.GoToBegin();
   cbfVolumeIter.GoToBegin(); 
   ttpVolumeIter.GoToBegin(); 
-
+  fittedVolumeIter.GoToBegin();
 
   while (!aucVolumeIter.IsAtEnd()) {
+
+    /* PLAN: 
+      1. try with just shifting for BAT and see what happens 
+      2. try to modify existing curve fitting 
+        2. a. try to get entire PK solver locally, and modify it and see if it changes anything - worked 
+      3. that failing, try and fit using linear regression instead
+        3. a. using ITK 
+        3. b. using my own implementation 
+    */ 
 
       vectorVoxel = inputVectorVolumeIter.Get();
       fittedVectorVoxel = inputVectorVolumeIter.Get();
       
-      tempAUC = tempMTT = tempCBF = tempTTP = 0.0;
+      tempAUC = tempMaxSlope = tempMTT = tempCBF = tempTTP = tempAlpha = tempBeta = tempK1 = tempK2 = 0.0;
+
+      success = true; 
+
+      tempK2 = tempK1 = tempMaxSlope = tempAUC = tempMTT = tempCBF = 0.0;
+      BATIndex = FirstPeakIndex = 0;
 
       
-      /* 
-      //need to figure out what's wrong with this! 
-      tempAUC = (integrate(const_cast<float *>(vectorVoxel.GetDataPointer()), &m_Timing[0], inputVectorVolume->GetNumberOfComponentsPerPixel()) )/(integrate(&m_AIF[0], &m_Timing[0], inputVectorVolume->GetNumberOfComponentsPerPixel())); 
-      //tempAUC = clean_up(timeSize, &m_Timing[0], const_cast<float *>(shiftedVectorVoxel.GetDataPointer() ), BATIndex,  m_AUCTimeInterval)/m_aifAUC; 
 
-      aucVolumeIter.Set(static_cast<OutputVolumePixelType>(tempAUC) ); 
-      ++aucVolumeIter;
-      */ 
+      // Compute the bolus arrival time and the max slope parameter
+      if (success)
+        {
+          int status;
+       
+          status = compute_bolus_arrival_time(timeSize, &vectorVoxel[0], BATIndex, FirstPeakIndex, tempMaxSlope);
 
+        if (!status)
+          {
+          success = false;
+          }
+        }
+
+      // Shift the current time course to align with the BAT of the AIF
+      // (note the sense of the shift)
+      if (success)
+        {
+        batVolumeIter.Set(BATIndex);
+        shift = m_AIFBATIndex - BATIndex;
+        shiftedVectorVoxel.Fill(0.0);
+        if (shift <= 0)
+          {
+          // AIF BAT before current BAT, should always be the case
+          shiftStart = 0;
+          shiftEnd = vectorVoxel.Size() + shift;
+          }
+        else
+          {
+          success = false;
+          }
+        }
+
+       if (success)
+        {
+        for (unsigned int i = shiftStart; i < shiftEnd; ++i)
+          {
+          shiftedVectorVoxel[i] = vectorVoxel[i - shift];
+          }
+        }
       
+
       for (index = 0; index < timeSize; index++) {
         Ct(index, 0) = vectorVoxel[index]; 
       } 
@@ -827,6 +853,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 
 
       ++inputVectorVolumeIter;
+      ++batVolumeIter;
 
       progress.CompletedPixel(); 
       

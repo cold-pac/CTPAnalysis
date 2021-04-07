@@ -30,6 +30,12 @@ static itk::TimeProbesCollectorBase probe;
 int m_ConstantBAT;
 std::string m_BATCalculationMode;
 
+
+void test_func() {
+  printf("IT WORKS!!!! IT WORKS!!"); 
+}
+// changes here do work ! 
+
 //
 // Implementation of the PkSolver API
 // 

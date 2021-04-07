@@ -167,6 +167,24 @@
       <description><![CDATA[Output 'Time to Peak' map (time from the start of the injection until maximum contrast is reached).]]></description>
     </image>
 
+    <image type="dynamic-contrast-enhanced">
+      <name>OutputFittedDataImageFileName</name>
+      <label>Output Fitted Data 4D Image</label>
+      <channel>output</channel>
+      <longflag>fitted</longflag>
+      <description><![CDATA[Output Fitted Data 4D Image (txyz)]]></description>
+    </image>	 
+
+
+    <image>
+      <name>OutputBolusArrivalTimeImageFileName</name>
+      <label>Output Bolus Arrival Time Image</label>
+      <channel>output</channel>
+      <longflag>outputBAT</longflag>
+      <description><![CDATA[Output Per-Pixel Bolus Arrival Time (xyz)]]></description>
+    </image>
+
+
   </parameters>
   <!-- 
   <parameters advanced="true">
@@ -210,13 +228,7 @@
       <longflag>concentrations</longflag>
       <description><![CDATA[Output Concentrations 4D Image (txyz)]]></description>
     </image>	
-    <image type="dynamic-contrast-enhanced">
-      <name>OutputFittedDataImageFileName</name>
-      <label>Output Fitted Data 4D Image</label>
-      <channel>output</channel>
-      <longflag>fitted</longflag>
-      <description><![CDATA[Output Fitted Data 4D Image (txyz)]]></description>
-    </image>	 
+    
   </parameters>
   --> 
 </executable>

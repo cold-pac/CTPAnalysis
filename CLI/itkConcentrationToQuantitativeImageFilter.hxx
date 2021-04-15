@@ -616,26 +616,45 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   }
 
 
-  /* 
-
-  float B[timeSize][timeSize] = {0}; 
+  vnl_matrix<float> B(timeSize, timeSize, 0.0); 
 
   for (i = 0; i < timeSize; i++) {
     for (j = 0; j < timeSize; j++) {
 
-      if (j > i) {
-        B[i][j]
-      }
-
+        if (j > i) {
+          B(i, j) = m_AIF[timeSize - (j - i)]; //0 - indexed, unlike in R (pretty sure!)
+        } else {
+          B(i, j) = 0.0; //test 
+        }
     }
   }
 
-  */ 
+
+  //can I even do a column bind? 
+  //shonky cbind/rbind idea: 2 * timeSize, fill out manually.... 
+  //actually should look up convolution matrix you dingus! 
+
+  // cmat = rbind(cbind(camat,B),cbind(B,camat))
+  vnl_matrix<float> cmat(2 * timeSize, 2 * timeSize); 
+
+  for (i = 0; i < (2 * timeSize); i++) {
+    for (j = 0; j < (2 * timeSize); j++) {
+        if (i < timeSize && j < timeSize) {
+          cmat(i, j) = camat(i, j); 
+        } else if (i > timeSize && j > timeSize) {
+          cmat(i, j) = camat((i - timeSize), (j - timeSize)); 
+        } else if (i < timeSize && j > timeSize) {
+          cmat(i, j) = B(i, (j - timeSize)); 
+        } else if (i > timeSize && j < timeSize) {
+          cmat(i, j) = B((i - timeSize), j); 
+        }
+    }
+  }
 
   //might be a good idea to use different SVD source code
   //one with better documentation!
 
-  vnl_svd<float> svd (camat); 
+  vnl_svd<float> svd (cmat); 
 
   vnl_matrix<float> u, v, d; 
 
@@ -655,8 +674,8 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   //1383.16 --> seems fine 
 
   //can use "vnl_diagonal_matrix" as well 
-  vnl_vector<float> vector_sr (timeSize, 0); //values initialised as 0!
-  vnl_vector<float> vector_d (timeSize); 
+  vnl_vector<float> vector_sr (2 * timeSize, 0); //values initialised as 0!
+  vnl_vector<float> vector_d (2 * timeSize); 
 
   vector_d = d.get_diagonal(); 
   //diagonal is longer than timeSize... 
@@ -665,7 +684,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   //this is where the error is I THINK! 
 
 
-  for (i = 0; i < timeSize; i++) {
+  for (i = 0; i < (2 * timeSize); i++) {
 
     if (vector_d.get(i) > psvd) {
       vector_sr.put(i, 1/vector_d.get(i)); 
@@ -677,7 +696,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   //double check ! 
 
 
-  vnl_matrix<float> ca_inv (timeSize, timeSize); 
+  vnl_matrix<float> ca_inv (2 * timeSize, 2 * timeSize); 
 
 
   //check that this is actually how you multiply! 
@@ -707,8 +726,15 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   //m x n, m rows, n columns 
   //Ct is just the concentration values in the voxel at each time point ! 
   //vnl_vector<float> Ct(vectorVoxel, timeSize); 
-  vnl_matrix<float> rt_hat(timeSize, timeSize); 
+
+  vnl_matrix<float> Ctb ((2 * timeSize), 1, 0); 
+
+  vnl_matrix<float> rt_hat((timeSize), 1); //rt_hat is only a single column, for whatever reason
+
   int index = 0; 
+  int k = 0; 
+ // int v = 0; can't call it v! v is part of your decomposition !  
+  float sumabsf; 
   
   aucVolumeIter.GoToBegin();
   mttVolumeIter.GoToBegin();
@@ -725,6 +751,9 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
       3. that failing, try and fit using linear regression instead
         3. a. using ITK 
         3. b. using my own implementation 
+      4. you can do linear regression using matrixes, faster, and last shot if nothing else works 
+      5. also try the different algorithms is Seth Lirette's code and see if they produce a better result - maybe do this first 
+      6. try the MATLAB code - see how fast it is - maybe this will be enough anyway 
     */ 
 
       vectorVoxel = inputVectorVolumeIter.Get();
@@ -737,66 +766,55 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
       tempK2 = tempK1 = tempMaxSlope = tempAUC = tempMTT = tempCBF = 0.0;
       BATIndex = FirstPeakIndex = 0;
 
-      
-
-      // Compute the bolus arrival time and the max slope parameter
-      if (success)
-        {
-          int status;
-       
-          status = compute_bolus_arrival_time(timeSize, &vectorVoxel[0], BATIndex, FirstPeakIndex, tempMaxSlope);
-
-        if (!status)
-          {
-          success = false;
-          }
-        }
-
-      // Shift the current time course to align with the BAT of the AIF
-      // (note the sense of the shift)
-      if (success)
-        {
-        batVolumeIter.Set(BATIndex);
-        shift = m_AIFBATIndex - BATIndex;
-        shiftedVectorVoxel.Fill(0.0);
-        if (shift <= 0)
-          {
-          // AIF BAT before current BAT, should always be the case
-          shiftStart = 0;
-          shiftEnd = vectorVoxel.Size() + shift;
-          }
-        else
-          {
-          success = false;
-          }
-        }
-
-       if (success)
-        {
-        for (unsigned int i = shiftStart; i < shiftEnd; ++i)
-          {
-          shiftedVectorVoxel[i] = vectorVoxel[i - shift];
-          }
-        }
-      
-
+     
+      //Ct = inimage[i,j,]
       for (index = 0; index < timeSize; index++) {
         Ct(index, 0) = vectorVoxel[index]; 
       } 
+
+      Ctb.fill(0.0); 
+
+      for (k = 0; k < timeSize; k++) { //did they make a mistake? 
+        Ctb(k, 0) = Ct.get(k, 0);  // padding zeros at the end
+        //shouldn't this be a copy! rather than, like, isn't this a pointer 
+        // think! 
+        //about it! 
+      }
+
       //MATRICES IN VNL ARE 0-INDEXED!!! 
 
-      rt_hat = (ca_inv * Ct); 
+      rt_hat = (ca_inv * Ctb); 
 
+      //this is the oscillating bit, will work on it! 
+      
+      
+      sumabsf = 0.0; 
+
+      //std::cout << "the timesize is" << timeSize << " \n"; 
+
+      //the first thing that needs fixing ! 
+      for (index = 2; index < (2 * timeSize) - 1; index++) {
+        sumabsf = sumabsf + abs(rt_hat.get(index, 0) - (2 * rt_hat.get(index - 1, 0)) + rt_hat.get(index - 2, 0)); 
+        //std::cout << "this is the value " << rt_hat.get(index, 0); 
+        //std::cout << "this is the absoulate value" << " " << sumabsf << "\n"; 
+      }
+      
+      
       
       if (check_tissue(const_cast<float *>(vectorVoxel.GetDataPointer()), timeSize)) {
+           
+          //tempCBF = (sumabsf) * (0.178); 
+         
+          
+          tempCBF = rt_hat.max_value() * 80; 
 
-          tempCBF = rt_hat.max_value() * 22; 
 
       } else {
 
           tempCBF = 0; 
 
       }
+
 
         
 
@@ -830,6 +848,12 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
           //needs to be multiplied by 'constant' interval between scans, ▵T
           tempAUC = tempCBF/tempMTT; 
 
+          //test TTP, putting it into 
+          //the MTT because I am lazy 
+          tempMTT = m_Timing[rt_hat.arg_max()]; 
+          tempMTT = rt_hat.arg_max(); 
+          //std::cout << "this is TMax" << rt_hat.arg_max() << "\n"; 
+
       } else {
 
           tempMTT = 0; 
@@ -854,6 +878,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 
       ++inputVectorVolumeIter;
       ++batVolumeIter;
+      ++fittedVolumeIter;
 
       progress.CompletedPixel(); 
       

@@ -12,6 +12,10 @@
 //"stores a diagonal matrix as a single vector"
 #include "vnl/vnl_vector.h"
 #include "vnl/algo/vnl_svd.h"
+#include "vnl/algo/vnl_qr.h"
+#include "vnl/vnl_matrix_fixed.h"
+#include "vnl/vnl_inverse.h"
+#include "vnl/algo/vnl_matrix_inverse.h"
 
 // work around compile error on Windows
 #define M_PI 3.1415926535897932384626433832795
@@ -22,9 +26,19 @@
 
 #include <math.h>
 
+#include "nlopt.hpp"
+
+
+//last ditch try 
+#include <itkMatrix.h>
+#include <itkVector.h>
 
 namespace itk
 {
+
+
+
+
 
 
 
@@ -436,7 +450,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 
   //std::cout << "Model type: " << m_ModelType << std::endl;
 
-  int timeSize = (int)inputVectorVolume->GetNumberOfComponentsPerPixel();
+  const int timeSize = (int)inputVectorVolume->GetNumberOfComponentsPerPixel();
 
   int   aif_FirstPeakIndex = 0;
   float aif_MaxSlope = 0.0f;
@@ -576,7 +590,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   itk::LevenbergMarquardtOptimizer::Pointer optimizer = itk::LevenbergMarquardtOptimizer::New();
   LMCostFunction::Pointer                   costFunction = LMCostFunction::New();
   
-  int timeSize = (int)inputVectorVolume->GetNumberOfComponentsPerPixel();
+  const int timeSize = (int)inputVectorVolume->GetNumberOfComponentsPerPixel();
   // each pixel has 14 'components' i.e. acquisition times. 
 
   /* ok here we go: 
@@ -615,7 +629,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
     }
   }
 
-
+  /* 
   vnl_matrix<float> B(timeSize, timeSize, 0.0); 
 
   for (i = 0; i < timeSize; i++) {
@@ -628,8 +642,9 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
         }
     }
   }
+  */ 
 
-
+  /* 
   //can I even do a column bind? 
   //shonky cbind/rbind idea: 2 * timeSize, fill out manually.... 
   //actually should look up convolution matrix you dingus! 
@@ -651,10 +666,12 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
     }
   }
 
+  */ 
+
   //might be a good idea to use different SVD source code
   //one with better documentation!
 
-  vnl_svd<float> svd (cmat); 
+  vnl_svd<float> svd (camat); 
 
   vnl_matrix<float> u, v, d; 
 
@@ -674,8 +691,8 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   //1383.16 --> seems fine 
 
   //can use "vnl_diagonal_matrix" as well 
-  vnl_vector<float> vector_sr (2 * timeSize, 0); //values initialised as 0!
-  vnl_vector<float> vector_d (2 * timeSize); 
+  vnl_vector<float> vector_sr (timeSize, 0); //values initialised as 0!
+  vnl_vector<float> vector_d (timeSize); 
 
   vector_d = d.get_diagonal(); 
   //diagonal is longer than timeSize... 
@@ -684,7 +701,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   //this is where the error is I THINK! 
 
 
-  for (i = 0; i < (2 * timeSize); i++) {
+  for (i = 0; i < (timeSize); i++) {
 
     if (vector_d.get(i) > psvd) {
       vector_sr.put(i, 1/vector_d.get(i)); 
@@ -696,7 +713,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   //double check ! 
 
 
-  vnl_matrix<float> ca_inv (2 * timeSize, 2 * timeSize); 
+  vnl_matrix<float> ca_inv (timeSize, timeSize); 
 
 
   //check that this is actually how you multiply! 
@@ -727,14 +744,61 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
   //Ct is just the concentration values in the voxel at each time point ! 
   //vnl_vector<float> Ct(vectorVoxel, timeSize); 
 
+  /* 
   vnl_matrix<float> Ctb ((2 * timeSize), 1, 0); 
+  */ 
 
   vnl_matrix<float> rt_hat((timeSize), 1); //rt_hat is only a single column, for whatever reason
 
+
+ 
+
   int index = 0; 
-  int k = 0; 
+  // int k = 0; 
  // int v = 0; can't call it v! v is part of your decomposition !  
-  float sumabsf; 
+  // float sumabsf; 
+
+
+
+
+struct Point {
+  double _x, _y;
+};
+
+struct Line {
+  double _slope, _yInt;
+  double getYforX(double x) {
+    return _slope*x + _yInt;
+  }
+
+  // Construct line from points
+  bool fitPoints(const std::vector<Point> &pts) {
+    int nPoints = pts.size();
+    if( nPoints < 2 ) {
+      // Fail: infinitely many lines passing through this single point
+      return false;
+    }
+    double sumX=0, sumY=0, sumXY=0, sumX2=0;
+    for(int i=0; i<nPoints; i++) {
+      sumX += pts[i]._x;
+      sumY += pts[i]._y;
+      sumXY += pts[i]._x * pts[i]._y;
+      sumX2 += pts[i]._x * pts[i]._x;
+    }
+    double xMean = sumX / nPoints;
+    double yMean = sumY / nPoints;
+    double denominator = sumX2 - sumX * xMean;
+    // You can tune the eps (1e-7) below for your specific task
+    if( std::fabs(denominator) < 1e-7 ) {
+      // Fail: it seems a vertical line
+      return false;
+    }
+    _slope = (sumXY - sumX * yMean) / denominator;
+    _yInt = yMean - _slope * xMean;
+    return true;
+  }
+};
+
   
   aucVolumeIter.GoToBegin();
   mttVolumeIter.GoToBegin();
@@ -766,12 +830,165 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
       tempK2 = tempK1 = tempMaxSlope = tempAUC = tempMTT = tempCBF = 0.0;
       BATIndex = FirstPeakIndex = 0;
 
+
+
+      tempTTP = time_to_peak(const_cast<float *>(vectorVoxel.GetDataPointer() ), m_Timing); 
+      ttpVolumeIter.Set(static_cast<OutputVolumePixelType>(tempTTP) );
+      ++ttpVolumeIter; 
+
+      // linear regression 
+
+      /*
+      vnl_matrix<double> ind_var(timeSize, 2);  
+      //using MatrixTypeInd = itk::Matrix<float, 14, 2>; 
+      //MatrixTypeInd ind_var; 
+
+
+      vnl_matrix<double> dep_var(timeSize, 1); 
+      //using MatrixTypeDep = itk::Matrix<float, 14, 1>; 
+      //MatrixTypeDep dep_var; 
+
+
+      vnl_matrix<double> weights(2, 1); 
+      /* 
+      using MatrixTypeWeights = itk::Matrix<float, 2, 1>; 
+      MatrixTypeWeights weights; 
+      */
+ 
+
+      //starters, assuming t0 = 0, i.e. the bolus arrival is instantaneous 
+      //ind_var.fill(0.0); 
+
+      /* 
+      for (index = 0; index < timeSize; index++) {
+        ind_var(index, 0) =  1;
+        if (m_Timing[index] != 0) {
+            ind_var(index, 1) = (1 + log(m_Timing[index]/tempTTP) - (m_Timing[index]/tempTTP));
+        } else {
+            ind_var(index, 1) = 0.0; 
+        }
+         
+        //row, column - right? 
+        //std::cout<< "This is the x value here: " << log(m_Timing[index]/tempTTP) << "\n"; 
+        // It may possible be working, just that... 
+        // when you cout you're only seeing the initial values, with TTP = 0 because 
+        // they are not tissue, just the air around the pt's head 
+        // so continue forward and see if you do output something 
+        if (vectorVoxel[index] != 0) {
+             //dep_var.put(index, log(vectorVoxel[index]));
+             dep_var(index, 0) = log(vectorVoxel[index]); 
+        } else {
+             //dep_var.put(index, 0.0); 
+            //dep_var(index, 0) = 0.0; 
+            dep_var(index, 0) = 0.0; 
+        }
+        
+
+        if (tempTTP != 0) {
+         // std::cout << " " << ind_var(index, 0) << " " << "\n"; 
+
+        }
+      }
+      */ 
+
+      std::vector<Point> my_points(timeSize); 
+
+      for (index = 0; index < timeSize; index++) {
+
+        struct Point temp; 
+        
+        if (m_Timing[index] != 0) {
+          
+          temp._x = (1 + log(m_Timing[index]/tempTTP) - (m_Timing[index]/tempTTP));
+
+        } else {
+
+          temp._x = 0.0; 
+
+        }
+
+        if (vectorVoxel[index] != 0) {
+
+          temp._y = log(vectorVoxel[index]); 
+
+        } else {
+
+          temp._y = 0.0; 
+
+        }
+
+        my_points[index] = temp; 
+
+
+      }
+
+      struct Line my_line; 
+
+      //std::cout << my_line.fitPoints(my_points) << "\n"; 
+
+      /*
+      if (my_line.fitPoints(my_points)) {
+        std::cout << "this is the slope: " << my_line._slope << "\n"; 
+        std::cout << "this is the yint: " << my_line._yInt << "\n"; 
+      }
+      */
+
+
+
+      //std::cout << "number of rows of ind_var " << (vnl_inverse(ind_var.transpose() * ind_var) * ind_var.transpose() ).rows() << " " << (vnl_inverse(ind_var.transpose() * ind_var) * ind_var.transpose() ).columns() << " " ;
+      //is this transposing this in place or returning a new copy -> probs important! 
+      //ind_var transpose has 1 row, timeSize columns 
+      //ind var has timeSize rows, 1 column 
+      
+      //product should have timeSize rows, timeSize columns => instead it's got 1 row x 1 column -> but this is correct
+
+      //i think it's literally just slow... :( 
+
+      //weights = (ind_var.transpose() * ind_var) * ind_var.transpose() * dep_var; 
+
+      //maybe vnl_inverse is the problem 
+      //you can tell just by taking it out 
+
+      //all that hair pulling and it turned out just to be 
+      //because i was trying to find the log of 0 
+      
+      /*
+      float alpha = weights.get(0); 
+      float beta = tempTTP/alpha; 
+      */
+
+      //"fitted curve" - lets see if this worked
+      //doubt it worked, i think there's a problem with my maths, also just setting log(0) = 0 - not correct 
+      //keep posting on stack overflow... it's helping you!
+
+      float step = m_Timing[timeSize - 1]/timeSize; 
+      for (index = 0; index < timeSize; index++) {
+       // fittedVectorVoxel[index] = pow((step*index), alpha) * exp(-(step*index)/beta);
+      
+       if (index = 0) {
+         //fittedVectorVoxel[index] = weights.get(0); 
+       } else {
+         //fittedVectorVoxel[index] = weights.get(1) * (step*index);  
+       }
+
+        //fittedVectorVoxel[index] = weights(0, 0) + weights(1, 0) * step * index; 
+       
+
+      }
+
+
+      if (tempTTP != 0) {
+        
+           // std::cout << "Doubt this worked: " << holder(0,0) << holder(0, 1) << holder(1, 0) << holder(1, 1) << "\n";        
+      }
+
      
       //Ct = inimage[i,j,]
       for (index = 0; index < timeSize; index++) {
         Ct(index, 0) = vectorVoxel[index]; 
       } 
-
+      
+      /* 
       Ctb.fill(0.0); 
 
       for (k = 0; k < timeSize; k++) { //did they make a mistake? 
@@ -780,14 +997,15 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
         // think! 
         //about it! 
       }
+      */ 
 
       //MATRICES IN VNL ARE 0-INDEXED!!! 
 
-      rt_hat = (ca_inv * Ctb); 
+      rt_hat = (ca_inv * Ct); 
 
       //this is the oscillating bit, will work on it! 
       
-      
+      /* 
       sumabsf = 0.0; 
 
       //std::cout << "the timesize is" << timeSize << " \n"; 
@@ -798,7 +1016,7 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
         //std::cout << "this is the value " << rt_hat.get(index, 0); 
         //std::cout << "this is the absoulate value" << " " << sumabsf << "\n"; 
       }
-      
+      */ 
       
       
       if (check_tissue(const_cast<float *>(vectorVoxel.GetDataPointer()), timeSize)) {
@@ -850,9 +1068,18 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
 
           //test TTP, putting it into 
           //the MTT because I am lazy 
-          tempMTT = m_Timing[rt_hat.arg_max()]; 
-          tempMTT = rt_hat.arg_max(); 
-          //std::cout << "this is TMax" << rt_hat.arg_max() << "\n"; 
+          // tempMTT = m_Timing[rt_hat.arg_max()]; 
+          //tempMTT = rt_hat.arg_max(); 
+         // std::cout << "These are all the values of rt_hat: "; 
+          for (index = 0; index < timeSize; index++) {
+            if (rt_hat.arg_max() == rt_hat(index, 0)) {
+              tempMTT = m_Timing[index]; 
+            }
+          }
+          /*
+          std::cout << "this is max value: " << rt_hat.max_value() << "\n"; 
+          std::cout << "this should be the index of the max value " << rt_hat.arg_max() << "\n"; 
+          */
 
       } else {
 
@@ -870,14 +1097,11 @@ ConcentrationToQuantitativeImageFilter<TInputImage,TMaskImage,TOutputImage>
       ++aucVolumeIter;
       
       //actually time to peak, just didn't want to create a new variable! 
-     
-      tempTTP = time_to_peak(const_cast<float *>(vectorVoxel.GetDataPointer() ), m_Timing); 
-      ttpVolumeIter.Set(static_cast<OutputVolumePixelType>(tempTTP) );
-      ++ttpVolumeIter; 
-
 
       ++inputVectorVolumeIter;
       ++batVolumeIter;
+
+      fittedVolumeIter.Set(fittedVectorVoxel); 
       ++fittedVolumeIter;
 
       progress.CompletedPixel(); 
